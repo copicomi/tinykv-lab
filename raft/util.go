@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"sort"
@@ -38,6 +39,10 @@ func max(a, b uint64) uint64 {
 		return a
 	}
 	return b
+}
+
+func randInt(a, b int) int {
+	return a + int(rand.Uint32())%(b-a)
 }
 
 // IsEmptyHardState returns true if the given HardState is empty.
@@ -124,6 +129,22 @@ func IsResponseMsg(msgt pb.MessageType) bool {
 	return msgt == pb.MessageType_MsgAppendResponse || msgt == pb.MessageType_MsgRequestVoteResponse || msgt == pb.MessageType_MsgHeartbeatResponse
 }
 
+func isFromLeaderMsg(msgt pb.MessageType) bool {
+	return msgt == pb.MessageType_MsgAppend ||
+		msgt == pb.MessageType_MsgHeartbeat ||
+		msgt == pb.MessageType_MsgSnapshot
+}
+
+func isFromCandidateMsg(msgt pb.MessageType) bool {
+	return msgt == pb.MessageType_MsgRequestVote
+}
+
 func isHardStateEqual(a, b pb.HardState) bool {
 	return a.Term == b.Term && a.Vote == b.Vote && a.Commit == b.Commit
+}
+
+func mDebug(format string, a ...interface{}) {
+	if false {
+		fmt.Printf(format, a...)
+	}
 }

@@ -157,6 +157,12 @@ type Raft struct {
 	// value.
 	// (Used in 3A conf change)
 	PendingConfIndex uint64
+
+	// 存储当前集群的所有节点ID
+	peers []uint64
+
+	// 用于随机化选举超时时间
+	randomExtraElectionTime int
 }
 
 // newRaft return a raft peer with the given config
@@ -164,68 +170,84 @@ func newRaft(c *Config) *Raft {
 	if err := c.validate(); err != nil {
 		panic(err.Error())
 	}
-	// Your Code Here (2A).
-	return nil
-}
-
-// sendAppend sends an append RPC with new entries (if any) and the
-// current commit index to the given peer. Returns true if a message was sent.
-func (r *Raft) sendAppend(to uint64) bool {
-	// Your Code Here (2A).
-	return false
-}
-
-// sendHeartbeat sends a heartbeat RPC to the given peer.
-func (r *Raft) sendHeartbeat(to uint64) {
-	// Your Code Here (2A).
+	raft := &Raft{
+		id:               c.ID,
+		Term:             0,
+		Vote:             None,
+		RaftLog:          newLog(c.Storage),
+		Prs:              make(map[uint64]*Progress),
+		State:            StateFollower,
+		votes:            make(map[uint64]bool),
+		heartbeatTimeout: c.HeartbeatTick,
+		electionTimeout:  c.ElectionTick,
+		peers:            c.peers,
+	}
+	return raft
 }
 
 // tick advances the internal logical clock by a single tick.
 func (r *Raft) tick() {
 	// Your Code Here (2A).
-}
-
-// becomeFollower transform this peer's state to Follower
-func (r *Raft) becomeFollower(term uint64, lead uint64) {
-	// Your Code Here (2A).
-}
-
-// becomeCandidate transform this peer's state to candidate
-func (r *Raft) becomeCandidate() {
-	// Your Code Here (2A).
-}
-
-// becomeLeader transform this peer's state to leader
-func (r *Raft) becomeLeader() {
-	// Your Code Here (2A).
-	// NOTE: Leader should propose a noop entry on its term
+	r.heartbeatElapsed++
+	r.electionElapsed++
+	if r.electionElapsed >= r.electionTimeout+r.randomExtraElectionTime {
+		r.startElection()
+		r.electionElapsed = 0
+		r.randomExtraElectionTime = randInt(0, r.electionTimeout+1)
+	}
+	if r.State == StateLeader && r.heartbeatElapsed >= r.heartbeatTimeout {
+		r.bcastHeartbeat()
+		r.heartbeatElapsed = 0
+	}
 }
 
 // Step the entrance of handle message, see `MessageType`
 // on `eraftpb.proto` for what msgs should be handled
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A).
+
+	// Step() 应该提前做出与状态无关的判断，保证执行 handleXXX() 一定是合法的
+	if !IsLocalMsg(m.MsgType) && m.Term < r.Term {
+		return nil
+	}
+	if r.findAnotherLeader(m) {
+		r.becomeFollower(m.Term, m.From)
+	}
+
 	switch r.State {
 	case StateFollower:
+		switch m.MsgType {
+		case pb.MessageType_MsgAppend:
+			r.handleAppendEntries(m)
+		case pb.MessageType_MsgHeartbeat:
+			r.handleHeartbeat(m)
+		case pb.MessageType_MsgRequestVote:
+			r.handleRequestVote(m)
+		case pb.MessageType_MsgHup:
+			r.handleHup(m)
+
+		}
 	case StateCandidate:
+		switch m.MsgType {
+		case pb.MessageType_MsgRequestVoteResponse:
+			r.handleRequestVoteResponse(m)
+		case pb.MessageType_MsgAppend:
+			r.handleAppendEntries(m)
+		case pb.MessageType_MsgHup:
+			r.handleHup(m)
+		case pb.MessageType_MsgHeartbeat:
+			r.handleHeartbeat(m)
+		}
 	case StateLeader:
+		switch m.MsgType {
+		case pb.MessageType_MsgBeat:
+			r.handleBeat(m)
+		case pb.MessageType_MsgHup:
+			r.handleHup(m)
+
+		}
 	}
 	return nil
-}
-
-// handleAppendEntries handle AppendEntries RPC request
-func (r *Raft) handleAppendEntries(m pb.Message) {
-	// Your Code Here (2A).
-}
-
-// handleHeartbeat handle Heartbeat RPC request
-func (r *Raft) handleHeartbeat(m pb.Message) {
-	// Your Code Here (2A).
-}
-
-// handleSnapshot handle Snapshot RPC request
-func (r *Raft) handleSnapshot(m pb.Message) {
-	// Your Code Here (2C).
 }
 
 // addNode add a new node to raft group
