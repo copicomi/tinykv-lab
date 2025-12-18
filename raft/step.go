@@ -12,6 +12,8 @@ func (rf *Raft) stepLeader(m pb.Message) {
 		rf.handlePropose(m)
 	case pb.MessageType_MsgHeartbeatResponse:
 		rf.handleHeartbeatResponse(m)
+	case pb.MessageType_MsgRequestVote:
+		rf.handleRequestVote(m)
 	}
 }
 
@@ -25,6 +27,8 @@ func (rf *Raft) stepCandidate(m pb.Message) {
 		rf.handleHup(m)
 	case pb.MessageType_MsgHeartbeat:
 		rf.handleHeartbeat(m)
+	case pb.MessageType_MsgRequestVote:
+		rf.handleRequestVote(m)
 	}
 }
 

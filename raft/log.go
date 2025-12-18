@@ -127,11 +127,6 @@ func (l *RaftLog) append(entry pb.Entry) {
 	l.entries = append(l.entries, entry)
 }
 
-func (l *RaftLog) cutEntries(index uint64) {
-	l.entries = l.entries[:index-l.offset]
-	l.stabled = min(l.stabled, index-1)
-}
-
 func (l *RaftLog) appendEntries(entries []*pb.Entry, prev_index uint64) {
 	for i, entry := range entries {
 		index := prev_index + uint64(i) + 1

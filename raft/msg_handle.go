@@ -11,7 +11,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		success = true
 		r.RaftLog.appendEntries(entries, prev_log_index)
 		r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, prev_log_index+uint64(len(entries))))
-		//mDebug(r, "commit=%d, index=%d", r.RaftLog.committed, r.RaftLog.LastIndex())
+		// mDebug(r, "commit=%d, index=%d", r.RaftLog.committed, r.RaftLog.LastIndex())
 	}
 
 	r.sendAppendResponse(m.From, success)
@@ -32,7 +32,6 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
-	r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, r.RaftLog.LastIndex()))
 	r.sendHeartbeatResponse(m.From)
 }
 

@@ -2,7 +2,6 @@ package raft
 
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
-	// Your Code Here (2A).
 	r.State = StateFollower
 	r.Term = term
 	r.Lead = lead
@@ -11,7 +10,6 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 
 // becomeCandidate transform this peer's state to candidate
 func (r *Raft) becomeCandidate() {
-	// Your Code Here (2A).
 	r.State = StateCandidate
 	r.Vote = r.id
 	for _, peer := range r.peers {

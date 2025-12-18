@@ -213,20 +213,15 @@ func (r *Raft) tick() {
 // Step the entrance of handle message, see `MessageType`
 // on `eraftpb.proto` for what msgs should be handled
 func (r *Raft) Step(m pb.Message) error {
-	// Your Code Here (2A).
-	if m.MsgType == pb.MessageType_MsgHeartbeat ||
-		m.MsgType == pb.MessageType_MsgHeartbeatResponse {
-
-		mDebug(r, "from %d, msg: %s", m.From, m.MsgType)
-	}
-
 	// Step() 应该提前做出与状态无关的判断，保证执行 handleXXX() 一定是合法的
 	if !IsLocalMsg(m.MsgType) && m.Term < r.Term {
 		return nil
 	}
 	if r.findAnotherLeader(m) {
-		mDebug(r, "change into follower")
 		r.becomeFollower(m.Term, None)
+	}
+	if r.Lead == None && isWorkingWithLeader(m.MsgType) {
+		r.becomeFollower(m.Term, m.From)
 	}
 
 	switch r.State {

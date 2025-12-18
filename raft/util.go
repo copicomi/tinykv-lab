@@ -209,7 +209,7 @@ func (r *Raft) hasNewerLogThan(term uint64, index uint64) bool {
 }
 
 // Debugging
-const Debug = false
+const Debug = true
 
 func DPrintf(format string, a ...interface{}) {
 	if Debug {
