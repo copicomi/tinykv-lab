@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -122,7 +123,7 @@ func (p uint64Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p uint64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func IsLocalMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MessageType_MsgHup || msgt == pb.MessageType_MsgBeat
+	return msgt == pb.MessageType_MsgHup || msgt == pb.MessageType_MsgBeat || msgt == pb.MessageType_MsgPropose
 }
 
 func IsResponseMsg(msgt pb.MessageType) bool {
@@ -143,8 +144,79 @@ func isHardStateEqual(a, b pb.HardState) bool {
 	return a.Term == b.Term && a.Vote == b.Vote && a.Commit == b.Commit
 }
 
-func mDebug(format string, a ...interface{}) {
-	if false {
-		fmt.Printf(format, a...)
+func (r *Raft) findAnotherLeader(m pb.Message) bool {
+	if m.Term > r.Term {
+		return true
+	}
+	if m.Term == r.Term && isFromLeaderMsg(m.MsgType) {
+		return true
+	}
+	return false
+}
+
+func (r *Raft) isMatchPrevLog(prev_log_index, prev_log_term uint64) bool {
+	if prev_log_index == 0 {
+		return true
+	}
+	if r.RaftLog.LastIndex() < prev_log_index {
+		return false
+	}
+	term, err := r.RaftLog.Term(prev_log_index)
+	if err != nil {
+		return false
+	}
+	return term == prev_log_term
+}
+
+func (r *Raft) nilEntry() pb.Entry {
+	return pb.Entry{
+		Term:  r.Term,
+		Index: r.RaftLog.LastIndex() + 1,
+	}
+}
+
+func (r *Raft) nilProposeMessage() pb.Message {
+	entry := r.nilEntry()
+	return pb.Message{
+		MsgType: pb.MessageType_MsgPropose,
+		From:    r.id,
+		To:      r.id,
+		Entries: []*pb.Entry{&entry},
+	}
+}
+
+func (r *Raft) maybeCommit(msgt pb.MessageType) bool {
+	if r.State != StateLeader {
+		return false
+	}
+	return msgt == pb.MessageType_MsgAppendResponse || msgt == pb.MessageType_MsgPropose
+}
+
+func (r *Raft) hasNewerLogThan(term uint64, index uint64) bool {
+	last_index := r.RaftLog.LastIndex()
+	last_term, _ := r.RaftLog.Term(last_index)
+	if term > last_term {
+		return false
+	}
+	if term == last_term && index >= last_index {
+		return false
+	}
+	return true
+}
+
+// Debugging
+const Debug = true
+
+func DPrintf(format string, a ...interface{}) {
+	if Debug {
+		log.Printf(format, a...)
+	}
+}
+
+func mDebug(rf *Raft, format string, a ...interface{}) {
+	if Debug {
+		prefix := fmt.Sprintf("[%d] S%d ", rf.Term, rf.id)
+		format = prefix + format
+		log.Printf(format, a...)
 	}
 }

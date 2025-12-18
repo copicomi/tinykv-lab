@@ -1,7 +1,5 @@
 package raft
 
-import pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
-
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	// Your Code Here (2A).
@@ -16,6 +14,9 @@ func (r *Raft) becomeCandidate() {
 	// Your Code Here (2A).
 	r.State = StateCandidate
 	r.Vote = r.id
+	for _, peer := range r.peers {
+		r.votes[peer] = false
+	}
 	r.votes[r.id] = true
 	r.Term++
 }
@@ -25,16 +26,14 @@ func (r *Raft) becomeLeader() {
 	// Your Code Here (2A).
 	r.State = StateLeader
 	r.Lead = r.id
-	// TODO: 初始化 leader 的 log 进度，并进行广播
+	r.Vote = None
+	lastIndex := r.RaftLog.LastIndex()
+	for _, id := range r.peers {
+		r.Prs[id] = &Progress{
+			Match: 0,
+			Next:  lastIndex + 1,
+		}
+	}
+	r.Step(r.nilProposeMessage())
 	// NOTE: Leader should propose a noop entry on its term
-}
-
-func (r *Raft) findAnotherLeader(m pb.Message) bool {
-	if m.Term > r.Term {
-		return true
-	}
-	if m.Term == r.Term && isFromLeaderMsg(m.MsgType) {
-		return true
-	}
-	return false
 }

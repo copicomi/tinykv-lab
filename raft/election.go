@@ -21,21 +21,3 @@ func (r *Raft) haveGotMajorVotes() bool {
 	}
 	return grantedVotes*2 > len(r.peers)
 }
-
-func (r *Raft) bcastHeartbeat() {
-	if r.State == StateLeader {
-		for _, peer := range r.peers {
-			if peer != r.id {
-				r.sendHeartbeat(peer)
-			}
-		}
-	}
-}
-
-func (r *Raft) bcastRequestVote() {
-	for _, peer := range r.peers {
-		if peer != r.id {
-			r.sendRequestVote(peer)
-		}
-	}
-}

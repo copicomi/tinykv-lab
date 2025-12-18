@@ -4,13 +4,34 @@ import pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 
 // handleAppendEntries handle AppendEntries RPC request
 func (r *Raft) handleAppendEntries(m pb.Message) {
+	prev_log_index, prev_log_term, entries := m.Index, m.LogTerm, m.Entries
+	success := false
+
+	if r.isMatchPrevLog(prev_log_index, prev_log_term) {
+		success = true
+		r.RaftLog.appendEntries(entries, prev_log_index)
+	}
+
+	r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, r.RaftLog.LastIndex()))
+
+	r.sendAppendResponse(m.From, success)
+}
+
+func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
+	if m.Reject {
+		r.Prs[m.From].Next--
+		//TODO: 大步回退
+		r.sendAppend(m.From)
+		return
+	}
+	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
+	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
+
 }
 
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
-	if m.Term > r.Term {
-		r.becomeFollower(m.Term, m.From)
-	}
+	r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, r.RaftLog.LastIndex()))
 }
 
 // handleSnapshot handle Snapshot RPC request
@@ -26,24 +47,41 @@ func (r *Raft) handleBeat(m pb.Message) {
 
 func (r *Raft) handleRequestVote(m pb.Message) {
 	granted := false
-	if m.Term < r.Term {
-		granted = false
-	} else if r.Vote == None || r.Vote == m.From {
+	mDebug(r, "now vote: %d", r.Vote)
+	if !r.hasNewerLogThan(m.LogTerm, m.Index) && (r.Vote == None || r.Vote == m.From) {
 		granted = true
 		r.Vote = m.From
+		mDebug(r, "vote to %d", m.From)
 	}
 	r.sendRequestVoteResponse(m.From, granted)
 }
 
 func (r *Raft) handleRequestVoteResponse(m pb.Message) {
 	r.votes[m.From] = !m.Reject
+	if !m.Reject {
+		mDebug(r, "get vote from %d", m.From)
+	}
 	if r.haveGotMajorVotes() {
 		r.becomeLeader()
 	}
 }
 
 func (r *Raft) handleHup(m pb.Message) {
-	if r.State != StateLeader {
-		r.startElection()
+	r.startElection()
+}
+
+func (r *Raft) handlePropose(m pb.Message) {
+	if r.State == StateLeader {
+		for _, entry := range m.Entries {
+			entry := &pb.Entry{
+				Term:  r.Term,
+				Index: r.RaftLog.LastIndex() + 1,
+				Data:  entry.Data,
+			}
+			r.RaftLog.append(*entry)
+		}
+		r.Prs[r.id].Match = r.RaftLog.LastIndex()
+		r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
+		r.bcastAppend()
 	}
 }

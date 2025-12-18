@@ -170,10 +170,14 @@ func newRaft(c *Config) *Raft {
 	if err := c.validate(); err != nil {
 		panic(err.Error())
 	}
+	hardState, _, err := c.Storage.InitialState()
+	if err != nil {
+		panic(err)
+	}
 	raft := &Raft{
 		id:               c.ID,
-		Term:             0,
-		Vote:             None,
+		Term:             hardState.Term,
+		Vote:             hardState.Vote,
 		RaftLog:          newLog(c.Storage),
 		Prs:              make(map[uint64]*Progress),
 		State:            StateFollower,
@@ -182,6 +186,9 @@ func newRaft(c *Config) *Raft {
 		electionTimeout:  c.ElectionTick,
 		peers:            c.peers,
 	}
+	raft.RaftLog.applied = c.Applied
+	raft.RaftLog.committed = hardState.Commit
+	raft.votes[raft.Vote] = true
 	return raft
 }
 
@@ -205,48 +212,29 @@ func (r *Raft) tick() {
 // on `eraftpb.proto` for what msgs should be handled
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A).
+	// mDebug(r, "from %d, msg: %+v", m.From, m)
 
 	// Step() 应该提前做出与状态无关的判断，保证执行 handleXXX() 一定是合法的
 	if !IsLocalMsg(m.MsgType) && m.Term < r.Term {
 		return nil
 	}
 	if r.findAnotherLeader(m) {
-		r.becomeFollower(m.Term, m.From)
+		r.becomeFollower(m.Term, None)
 	}
 
 	switch r.State {
 	case StateFollower:
-		switch m.MsgType {
-		case pb.MessageType_MsgAppend:
-			r.handleAppendEntries(m)
-		case pb.MessageType_MsgHeartbeat:
-			r.handleHeartbeat(m)
-		case pb.MessageType_MsgRequestVote:
-			r.handleRequestVote(m)
-		case pb.MessageType_MsgHup:
-			r.handleHup(m)
-
-		}
+		r.stepFollower(m)
 	case StateCandidate:
-		switch m.MsgType {
-		case pb.MessageType_MsgRequestVoteResponse:
-			r.handleRequestVoteResponse(m)
-		case pb.MessageType_MsgAppend:
-			r.handleAppendEntries(m)
-		case pb.MessageType_MsgHup:
-			r.handleHup(m)
-		case pb.MessageType_MsgHeartbeat:
-			r.handleHeartbeat(m)
-		}
+		r.stepCandidate(m)
 	case StateLeader:
-		switch m.MsgType {
-		case pb.MessageType_MsgBeat:
-			r.handleBeat(m)
-		case pb.MessageType_MsgHup:
-			r.handleHup(m)
-
-		}
+		r.stepLeader(m)
 	}
+
+	if r.maybeCommit(m.MsgType) {
+		r.UpdateCommitIndex()
+	}
+
 	return nil
 }
 
