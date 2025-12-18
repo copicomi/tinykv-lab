@@ -60,6 +60,17 @@ func (r *Raft) sendHeartbeat(to uint64) {
 	r.msgs = append(r.msgs, msg)
 }
 
+func (r *Raft) sendHeartbeatResponse(to uint64) {
+	msg := pb.Message{
+		MsgType: pb.MessageType_MsgHeartbeatResponse,
+		From:    r.id,
+		To:      to,
+		Term:    r.Term,
+		Index:   r.RaftLog.LastIndex(),
+	}
+	r.msgs = append(r.msgs, msg)
+}
+
 func (r *Raft) sendRequestVote(to uint64) {
 	term, _ := r.RaftLog.Term(r.RaftLog.LastIndex())
 	msg := pb.Message{

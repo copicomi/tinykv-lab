@@ -10,11 +10,12 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	if r.isMatchPrevLog(prev_log_index, prev_log_term) {
 		success = true
 		r.RaftLog.appendEntries(entries, prev_log_index)
+		r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, prev_log_index+uint64(len(entries))))
+		//mDebug(r, "commit=%d, index=%d", r.RaftLog.committed, r.RaftLog.LastIndex())
 	}
 
-	r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, r.RaftLog.LastIndex()))
-
 	r.sendAppendResponse(m.From, success)
+
 }
 
 func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
@@ -32,6 +33,14 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
 	r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, r.RaftLog.LastIndex()))
+	r.sendHeartbeatResponse(m.From)
+}
+
+func (r *Raft) handleHeartbeatResponse(m pb.Message) {
+	// mDebug(r, "m.index=%d, l.lastindex=%d", m.Index, r.RaftLog.LastIndex())
+	if m.Index < r.RaftLog.LastIndex() {
+		r.sendAppend(m.From)
+	}
 }
 
 // handleSnapshot handle Snapshot RPC request
@@ -47,19 +56,22 @@ func (r *Raft) handleBeat(m pb.Message) {
 
 func (r *Raft) handleRequestVote(m pb.Message) {
 	granted := false
-	mDebug(r, "now vote: %d", r.Vote)
+	// mDebug(r, "now vote: %d", r.Vote)
 	if !r.hasNewerLogThan(m.LogTerm, m.Index) && (r.Vote == None || r.Vote == m.From) {
 		granted = true
 		r.Vote = m.From
-		mDebug(r, "vote to %d", m.From)
+		// mDebug(r, "vote to %d", m.From)
 	}
 	r.sendRequestVoteResponse(m.From, granted)
 }
 
 func (r *Raft) handleRequestVoteResponse(m pb.Message) {
 	r.votes[m.From] = !m.Reject
-	if !m.Reject {
-		mDebug(r, "get vote from %d", m.From)
+	if m.Reject {
+		r.rejects_count++
+		if r.rejects_count*2 > len(r.peers) {
+			r.becomeFollower(r.Term, None)
+		}
 	}
 	if r.haveGotMajorVotes() {
 		r.becomeLeader()

@@ -163,6 +163,9 @@ type Raft struct {
 
 	// 用于随机化选举超时时间
 	randomExtraElectionTime int
+
+	//
+	rejects_count int
 }
 
 // newRaft return a raft peer with the given config
@@ -188,7 +191,6 @@ func newRaft(c *Config) *Raft {
 	}
 	raft.RaftLog.applied = c.Applied
 	raft.RaftLog.committed = hardState.Commit
-	raft.votes[raft.Vote] = true
 	return raft
 }
 
@@ -212,13 +214,18 @@ func (r *Raft) tick() {
 // on `eraftpb.proto` for what msgs should be handled
 func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A).
-	// mDebug(r, "from %d, msg: %+v", m.From, m)
+	if m.MsgType == pb.MessageType_MsgHeartbeat ||
+		m.MsgType == pb.MessageType_MsgHeartbeatResponse {
+
+		mDebug(r, "from %d, msg: %s", m.From, m.MsgType)
+	}
 
 	// Step() 应该提前做出与状态无关的判断，保证执行 handleXXX() 一定是合法的
 	if !IsLocalMsg(m.MsgType) && m.Term < r.Term {
 		return nil
 	}
 	if r.findAnotherLeader(m) {
+		mDebug(r, "change into follower")
 		r.becomeFollower(m.Term, None)
 	}
 

@@ -130,7 +130,7 @@ func IsResponseMsg(msgt pb.MessageType) bool {
 	return msgt == pb.MessageType_MsgAppendResponse || msgt == pb.MessageType_MsgRequestVoteResponse || msgt == pb.MessageType_MsgHeartbeatResponse
 }
 
-func isFromLeaderMsg(msgt pb.MessageType) bool {
+func isWorkingWithLeader(msgt pb.MessageType) bool {
 	return msgt == pb.MessageType_MsgAppend ||
 		msgt == pb.MessageType_MsgHeartbeat ||
 		msgt == pb.MessageType_MsgSnapshot
@@ -148,7 +148,7 @@ func (r *Raft) findAnotherLeader(m pb.Message) bool {
 	if m.Term > r.Term {
 		return true
 	}
-	if m.Term == r.Term && isFromLeaderMsg(m.MsgType) {
+	if r.State == StateCandidate && m.Term == r.Term && isWorkingWithLeader(m.MsgType) {
 		return true
 	}
 	return false
@@ -189,7 +189,11 @@ func (r *Raft) maybeCommit(msgt pb.MessageType) bool {
 	if r.State != StateLeader {
 		return false
 	}
-	return msgt == pb.MessageType_MsgAppendResponse || msgt == pb.MessageType_MsgPropose
+	return msgt == pb.MessageType_MsgAppendResponse ||
+		msgt == pb.MessageType_MsgPropose ||
+		msgt == pb.MessageType_MsgAppend ||
+		msgt == pb.MessageType_MsgHeartbeatResponse ||
+		msgt == pb.MessageType_MsgHeartbeat
 }
 
 func (r *Raft) hasNewerLogThan(term uint64, index uint64) bool {
@@ -205,7 +209,7 @@ func (r *Raft) hasNewerLogThan(term uint64, index uint64) bool {
 }
 
 // Debugging
-const Debug = true
+const Debug = false
 
 func DPrintf(format string, a ...interface{}) {
 	if Debug {
@@ -215,7 +219,16 @@ func DPrintf(format string, a ...interface{}) {
 
 func mDebug(rf *Raft, format string, a ...interface{}) {
 	if Debug {
-		prefix := fmt.Sprintf("[%d] S%d ", rf.Term, rf.id)
+		var state string
+		switch rf.State {
+		case StateLeader:
+			state = "L"
+		case StateCandidate:
+			state = "C"
+		case StateFollower:
+			state = "F"
+		}
+		prefix := fmt.Sprintf("[%d] %s%d ", rf.Term, state, rf.id)
 		format = prefix + format
 		log.Printf(format, a...)
 	}

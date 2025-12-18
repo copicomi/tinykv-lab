@@ -18,6 +18,7 @@ func (r *Raft) becomeCandidate() {
 		r.votes[peer] = false
 	}
 	r.votes[r.id] = true
+	r.rejects_count = 0
 	r.Term++
 }
 

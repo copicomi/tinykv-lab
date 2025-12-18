@@ -10,6 +10,8 @@ func (rf *Raft) stepLeader(m pb.Message) {
 		rf.handleAppendEntriesResponse(m)
 	case pb.MessageType_MsgPropose:
 		rf.handlePropose(m)
+	case pb.MessageType_MsgHeartbeatResponse:
+		rf.handleHeartbeatResponse(m)
 	}
 }
 
