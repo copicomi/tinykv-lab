@@ -173,7 +173,7 @@ func newRaft(c *Config) *Raft {
 	if err := c.validate(); err != nil {
 		panic(err.Error())
 	}
-	hardState, _, err := c.Storage.InitialState()
+	hardState, confState, err := c.Storage.InitialState()
 	if err != nil {
 		panic(err)
 	}
@@ -191,6 +191,9 @@ func newRaft(c *Config) *Raft {
 	}
 	raft.RaftLog.applied = c.Applied
 	raft.RaftLog.committed = hardState.Commit
+	if confState.GetNodes() != nil {
+		raft.peers = confState.GetNodes()
+	}
 	return raft
 }
 
