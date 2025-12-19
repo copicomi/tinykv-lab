@@ -144,6 +144,10 @@ func isHardStateEqual(a, b pb.HardState) bool {
 	return a.Term == b.Term && a.Vote == b.Vote && a.Commit == b.Commit
 }
 
+func isSoftStateEqual(a, b *SoftState) bool {
+	return a.Lead == b.Lead && a.RaftState == b.RaftState
+}
+
 func (r *Raft) findAnotherLeader(m pb.Message) bool {
 	if m.Term > r.Term {
 		return true
