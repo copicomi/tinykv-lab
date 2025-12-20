@@ -6,6 +6,7 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.Term = term
 	r.Lead = lead
 	r.Vote = None
+	r.electionElapsed = 0
 }
 
 // becomeCandidate transform this peer's state to candidate
@@ -18,6 +19,7 @@ func (r *Raft) becomeCandidate() {
 	r.votes[r.id] = true
 	r.rejects_count = 0
 	r.Term++
+	r.electionElapsed = 0
 }
 
 // becomeLeader transform this peer's state to leader
@@ -29,10 +31,11 @@ func (r *Raft) becomeLeader() {
 	lastIndex := r.RaftLog.LastIndex()
 	for _, id := range r.peers {
 		r.Prs[id] = &Progress{
-			Match: 0,
+			Match: r.RaftLog.offset - 1,
 			Next:  lastIndex + 1,
 		}
 	}
 	r.Step(r.nilProposeMessage())
 	// NOTE: Leader should propose a noop entry on its term
+	r.electionElapsed = 0
 }

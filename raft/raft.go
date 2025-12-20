@@ -195,7 +195,7 @@ func newRaft(c *Config) *Raft {
 		raft.peers = confState.GetNodes()
 		for _, pid := range raft.peers {
 			raft.Prs[pid] = &Progress{
-				Match: 0,
+				Match: raft.RaftLog.offset - 1,
 				Next:  raft.RaftLog.LastIndex() + 1,
 			}
 		}
@@ -207,16 +207,10 @@ func newRaft(c *Config) *Raft {
 // tick advances the internal logical clock by a single tick.
 func (r *Raft) tick() {
 	// Your Code Here (2A).
-	r.heartbeatElapsed++
-	r.electionElapsed++
-	if r.electionElapsed >= r.electionTimeout+r.randomExtraElectionTime {
-		r.startElection()
-		r.electionElapsed = 0
-		r.randomExtraElectionTime = randInt(0, r.electionTimeout+1)
-	}
-	if r.State == StateLeader && r.heartbeatElapsed >= r.heartbeatTimeout {
-		r.bcastHeartbeat()
-		r.heartbeatElapsed = 0
+	if r.State == StateLeader {
+		r.tickLeader()
+	} else {
+		r.tickNotLeader()
 	}
 }
 
@@ -229,14 +223,19 @@ func (r *Raft) Step(m pb.Message) error {
 	}
 	if r.findAnotherLeader(m) {
 		r.becomeFollower(m.Term, None)
+		mInfo(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
 	}
 	if r.Lead == None && isWorkingWithLeader(m.MsgType) {
 		r.becomeFollower(m.Term, m.From)
+		mInfo(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
 	}
 
 	switch r.State {
 	case StateFollower:
 		r.stepFollower(m)
+		if isWorkingWithLeader(m.MsgType) {
+			r.electionElapsed = 0
+		}
 	case StateCandidate:
 		r.stepCandidate(m)
 	case StateLeader:

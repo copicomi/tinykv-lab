@@ -40,6 +40,7 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
 	r.sendHeartbeatResponse(m.From)
+	r.electionElapsed = 0
 }
 
 func (r *Raft) handleHeartbeatResponse(m pb.Message) {
@@ -66,7 +67,7 @@ func (r *Raft) handleRequestVote(m pb.Message) {
 	if !r.hasNewerLogThan(m.LogTerm, m.Index) && (r.Vote == None || r.Vote == m.From) {
 		granted = true
 		r.Vote = m.From
-		// mDebug(r, "vote to %d", m.From)
+		log.Infof("[%d] S%d Vote to %d", r.Term, r.id, r.Vote)
 	}
 	r.sendRequestVoteResponse(m.From, granted)
 }
@@ -78,9 +79,12 @@ func (r *Raft) handleRequestVoteResponse(m pb.Message) {
 		if r.rejects_count*2 > len(r.peers) {
 			r.becomeFollower(r.Term, None)
 		}
+	} else {
+		mInfo(r, "got vote from %d", m.From)
 	}
 	if r.haveGotMajorVotes() {
 		r.becomeLeader()
+		mInfo(r, "become leader")
 	}
 }
 

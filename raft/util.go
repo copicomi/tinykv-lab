@@ -237,3 +237,20 @@ func mDebug(rf *Raft, format string, a ...interface{}) {
 		log.Debugf(format, a...)
 	}
 }
+
+func mInfo(rf *Raft, format string, a ...interface{}) {
+	if Debug {
+		var state string
+		switch rf.State {
+		case StateLeader:
+			state = "L"
+		case StateCandidate:
+			state = "C"
+		case StateFollower:
+			state = "F"
+		}
+		prefix := fmt.Sprintf("[%d] %s%d ", rf.Term, state, rf.id)
+		format = prefix + format
+		log.Infof(format, a...)
+	}
+}

@@ -178,6 +178,7 @@ func (d *peerMsgHandler) preProposeRaftCommand(req *raft_cmdpb.RaftCmdRequest) e
 	regionID := d.regionId
 	leaderID := d.LeaderId()
 	if !d.IsLeader() {
+		log.Errorf("%s not leader, need redirect to %d", d.Tag, leaderID)
 		leader := d.getPeerFromCache(leaderID)
 		return &util.ErrNotLeader{RegionId: regionID, Leader: leader}
 	}

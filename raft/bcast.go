@@ -7,6 +7,7 @@ func (r *Raft) bcastHeartbeat() {
 				r.sendHeartbeat(peer)
 			}
 		}
+		r.heartbeatElapsed = 0
 	}
 }
 
