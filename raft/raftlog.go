@@ -81,7 +81,6 @@ func newLog(storage Storage) *RaftLog {
 		entries:   entries,
 		offset:    first_index,
 	}
-	log.Errorf("newLog %+v", l)
 	return l
 }
 

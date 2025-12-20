@@ -6,6 +6,7 @@ import (
 
 	"github.com/Connor1996/badger/y"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/message"
+	"github.com/pingcap-incubator/tinykv/kv/raftstore/meta"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/runner"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/snap"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/util"
@@ -52,37 +53,51 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			log.Panic(err)
 		}
 		d.Send(d.ctx.trans, ready.Messages)
+		wb := &engine_util.WriteBatch{}
 		for _, entry := range ready.CommittedEntries {
-			d.processEntry(entry)
+			d.processEntry(&entry, wb)
+			if d.stopped {
+				return
+			}
 		}
+		wb.WriteToDB(d.ctx.engine.Kv)
 		rd.Advance(ready)
 	}
 }
 
-func (d *peerMsgHandler) processEntry(entry eraftpb.Entry) {
-	var msg *raft_cmdpb.RaftCmdRequest
+func (d *peerMsgHandler) processEntry(entry *eraftpb.Entry, wb *engine_util.WriteBatch) {
+	if len(entry.Data) == 0 {
+		return
+	}
+	msg := &raft_cmdpb.RaftCmdRequest{}
 	if err := msg.Unmarshal(entry.Data); err != nil {
 		log.Panic(err)
 	}
-	reply := &raft_cmdpb.RaftCmdResponse{}
-	reply.Header = &raft_cmdpb.RaftResponseHeader{}
+	log.Debug(msg)
+	reply := &raft_cmdpb.RaftCmdResponse{
+		Responses: make([]*raft_cmdpb.Response, 0),
+		Header:    &raft_cmdpb.RaftResponseHeader{},
+	}
 
-	wb := &engine_util.WriteBatch{}
 	p := d.FindProposal(entry.Index, entry.Term)
 	for _, req := range msg.Requests {
 		resp, err := d.handleRaftRequest(req, wb)
 		if err != nil {
 			// read fail
 			if p != nil {
-				NotifyStaleReq(d.Term(), p.cb)
+				p.cb.Done(ErrResp(err))
 			}
 		}
 		reply.Responses = append(reply.Responses, resp)
+		if p != nil && req.CmdType == raft_cmdpb.CmdType_Snap {
+			p.cb.Txn = d.peerStorage.Engines.Kv.NewTransaction(false)
+		}
 	}
 	if p != nil {
 		p.cb.Done(reply)
 	}
-	wb.WriteToDB(d.ctx.engine.Kv)
+	d.peerStorage.applyState.AppliedIndex = entry.Index
+	wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
 }
 
 func (d *peerMsgHandler) FindProposal(index, term uint64) *proposal {
@@ -121,7 +136,7 @@ func (d *peerMsgHandler) handleRaftRequest(req *raft_cmdpb.Request,
 		wb.DeleteCF(req_delete.GetCf(), req_delete.GetKey())
 		resp.Delete = &raft_cmdpb.DeleteResponse{}
 	case raft_cmdpb.CmdType_Snap:
-		resp.Snap = &raft_cmdpb.SnapResponse{}
+		resp.Snap = &raft_cmdpb.SnapResponse{Region: d.Region()}
 		// TODO: snapshot (2C)
 	}
 	return resp, nil
