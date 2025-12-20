@@ -9,7 +9,9 @@ import (
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/runner"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/snap"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/util"
+	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/log"
+	"github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/metapb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
@@ -42,7 +44,87 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if d.stopped {
 		return
 	}
-	// Your Code Here (2B).
+	rd := d.RaftGroup
+	if rd.HasReady() {
+		// TODO: snapshot (2C)
+		ready := rd.Ready()
+		if _, err := d.peerStorage.SaveReadyState(&ready); err != nil {
+			log.Panic(err)
+		}
+		d.Send(d.ctx.trans, ready.Messages)
+		for _, entry := range ready.CommittedEntries {
+			d.processEntry(entry)
+		}
+		rd.Advance(ready)
+	}
+}
+
+func (d *peerMsgHandler) processEntry(entry eraftpb.Entry) {
+	var msg *raft_cmdpb.RaftCmdRequest
+	if err := msg.Unmarshal(entry.Data); err != nil {
+		log.Panic(err)
+	}
+	reply := &raft_cmdpb.RaftCmdResponse{}
+	reply.Header = &raft_cmdpb.RaftResponseHeader{}
+
+	wb := &engine_util.WriteBatch{}
+	p := d.FindProposal(entry.Index, entry.Term)
+	for _, req := range msg.Requests {
+		resp, err := d.handleRaftRequest(req, wb)
+		if err != nil {
+			// read fail
+			if p != nil {
+				NotifyStaleReq(d.Term(), p.cb)
+			}
+		}
+		reply.Responses = append(reply.Responses, resp)
+	}
+	if p != nil {
+		p.cb.Done(reply)
+	}
+	wb.WriteToDB(d.ctx.engine.Kv)
+}
+
+func (d *peerMsgHandler) FindProposal(index, term uint64) *proposal {
+	for len(d.proposals) > 0 {
+		p := d.proposals[0]
+		d.proposals = d.proposals[1:]
+		if p.index > index {
+			break
+		} else if p.index == index && p.term == term {
+			return p
+		} else {
+			NotifyStaleReq(d.Term(), p.cb)
+		}
+	}
+	return nil
+}
+
+func (d *peerMsgHandler) handleRaftRequest(req *raft_cmdpb.Request,
+	wb *engine_util.WriteBatch) (*raft_cmdpb.Response, error) {
+	resp := &raft_cmdpb.Response{}
+	resp.CmdType = req.CmdType
+	switch req.CmdType {
+	case raft_cmdpb.CmdType_Get:
+		req_get := req.GetGet()
+		ans, err := engine_util.GetCF(d.ctx.engine.Kv, req_get.GetCf(), req_get.GetKey())
+		if err != nil {
+			return nil, err
+		}
+		resp.Get = &raft_cmdpb.GetResponse{Value: ans}
+	case raft_cmdpb.CmdType_Put:
+		req_put := req.GetPut()
+		wb.SetCF(req_put.GetCf(), req_put.GetKey(), req_put.GetValue())
+		resp.Put = &raft_cmdpb.PutResponse{}
+	case raft_cmdpb.CmdType_Delete:
+		req_delete := req.GetDelete()
+		wb.DeleteCF(req_delete.GetCf(), req_delete.GetKey())
+		resp.Delete = &raft_cmdpb.DeleteResponse{}
+	case raft_cmdpb.CmdType_Snap:
+		resp.Snap = &raft_cmdpb.SnapResponse{}
+		// TODO: snapshot (2C)
+	}
+	return resp, nil
 }
 
 func (d *peerMsgHandler) HandleMsg(msg message.Msg) {
@@ -110,10 +192,34 @@ func (d *peerMsgHandler) preProposeRaftCommand(req *raft_cmdpb.RaftCmdRequest) e
 func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	err := d.preProposeRaftCommand(msg)
 	if err != nil {
-		cb.Done(ErrResp(err))
-		return
+		log.Panic(err)
 	}
 	// Your Code Here (2B).
+	if len(msg.Requests) > 0 {
+		d.proposeRequestNormal(msg, cb)
+	} else {
+		// admin request
+	}
+}
+
+func (d *peerMsgHandler) proposeRequestNormal(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
+	d.appendProposal(cb)
+	data, err := msg.Marshal()
+	if err != nil {
+		log.Panic(err)
+	}
+	if err = d.RaftGroup.Propose(data); err != nil {
+		log.Panic(err)
+	}
+}
+
+func (d *peerMsgHandler) appendProposal(cb *message.Callback) {
+	proposal := &proposal{
+		index: d.nextProposalIndex(),
+		term:  d.Term(),
+		cb:    cb,
+	}
+	d.proposals = append(d.proposals, proposal)
 }
 
 func (d *peerMsgHandler) onTick() {
@@ -223,9 +329,9 @@ func (d *peerMsgHandler) validateRaftMessage(msg *rspb.RaftMessage) bool {
 	return true
 }
 
-/// Checks if the message is sent to the correct peer.
-///
-/// Returns true means that the message can be dropped silently.
+// / Checks if the message is sent to the correct peer.
+// /
+// / Returns true means that the message can be dropped silently.
 func (d *peerMsgHandler) checkMessage(msg *rspb.RaftMessage) bool {
 	fromEpoch := msg.GetRegionEpoch()
 	isVoteMsg := util.IsVoteMessage(msg.Message)
