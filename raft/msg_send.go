@@ -11,7 +11,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 	var entries []*pb.Entry
 	var err error
 	if r.RaftLog.LastIndex() >= r.Prs[to].Next { // 正常更新
-		entries, err = r.RaftLog.unmatchedEntries(r.Prs[to].Next)
+		entries, err = r.RaftLog.nextEntries(r.Prs[to].Next)
 		if err != nil {
 			// err = ErrCompacted
 			// TODO: send snapshot

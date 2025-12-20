@@ -143,12 +143,12 @@ func (l *RaftLog) appendEntries(entries []*pb.Entry, prev_index uint64) {
 	}
 }
 
-func (l *RaftLog) unmatchedEntries(match uint64) ([]*pb.Entry, error) {
+func (l *RaftLog) nextEntries(next uint64) ([]*pb.Entry, error) {
 	entries := make([]*pb.Entry, 0)
-	if match+1 < l.offset {
+	if next+1 < l.offset {
 		return nil, ErrCompacted
 	}
-	for _, entry := range l.entries[match-l.offset:] {
+	for _, entry := range l.entries[next-l.offset:] {
 		entries = append(entries, &pb.Entry{
 			Term:  entry.Term,
 			Index: entry.Index,

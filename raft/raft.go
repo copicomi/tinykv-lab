@@ -193,7 +193,14 @@ func newRaft(c *Config) *Raft {
 	raft.RaftLog.committed = hardState.Commit
 	if confState.GetNodes() != nil {
 		raft.peers = confState.GetNodes()
+		for _, pid := range raft.peers {
+			raft.Prs[pid] = &Progress{
+				Match: 0,
+				Next:  raft.RaftLog.LastIndex() + 1,
+			}
+		}
 	}
+	// log.Infof("raft %d Peers %+v", raft.id, raft.peers)
 	return raft
 }
 
