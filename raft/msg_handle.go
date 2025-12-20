@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -13,7 +14,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 		success = true
 		r.RaftLog.appendEntries(entries, prev_log_index)
 		r.RaftLog.committed = max(r.RaftLog.committed, min(m.Commit, prev_log_index+uint64(len(entries))))
-		// mDebug(r, "commit=%d, index=%d", r.RaftLog.committed, r.RaftLog.LastIndex())
+		mDebug(r, "commit=%d, index=%d", r.RaftLog.committed, r.RaftLog.LastIndex())
 	}
 
 	r.sendAppendResponse(m.From, success)
@@ -24,6 +25,10 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 	if m.Reject {
 		r.Prs[m.From].Next--
 		//TODO: 大步回退
+
+		if r.Prs[m.From].Next < 0 {
+			log.Errorf("raft %d: next of peer %d = %d", r.id, m.From, r.Prs[m.From].Next)
+		}
 		r.sendAppend(m.From)
 		return
 	}

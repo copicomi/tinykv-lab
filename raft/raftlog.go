@@ -15,6 +15,7 @@
 package raft
 
 import (
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -80,6 +81,7 @@ func newLog(storage Storage) *RaftLog {
 		entries:   entries,
 		offset:    first_index,
 	}
+	log.Errorf("newLog %+v", l)
 	return l
 }
 
@@ -147,6 +149,9 @@ func (l *RaftLog) nextEntries(next uint64) ([]*pb.Entry, error) {
 	entries := make([]*pb.Entry, 0)
 	if next+1 < l.offset {
 		return nil, ErrCompacted
+	}
+	if next-l.offset < 0 {
+		log.Panicf("nextEntries: %d, %d", next, l.offset)
 	}
 	for _, entry := range l.entries[next-l.offset:] {
 		entries = append(entries, &pb.Entry{

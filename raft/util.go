@@ -18,13 +18,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"os/exec"
 	"sort"
 	"strings"
 
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -159,7 +159,7 @@ func (r *Raft) findAnotherLeader(m pb.Message) bool {
 }
 
 func (r *Raft) isMatchPrevLog(prev_log_index, prev_log_term uint64) bool {
-	if prev_log_index == 0 {
+	if prev_log_index == r.RaftLog.offset-1 {
 		return true
 	}
 	if r.RaftLog.LastIndex() < prev_log_index {
@@ -217,7 +217,7 @@ const Debug = true
 
 func DPrintf(format string, a ...interface{}) {
 	if Debug {
-		log.Printf(format, a...)
+		log.Debugf(format, a...)
 	}
 }
 
@@ -234,6 +234,6 @@ func mDebug(rf *Raft, format string, a ...interface{}) {
 		}
 		prefix := fmt.Sprintf("[%d] %s%d ", rf.Term, state, rf.id)
 		format = prefix + format
-		log.Printf(format, a...)
+		log.Debugf(format, a...)
 	}
 }
