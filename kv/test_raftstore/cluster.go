@@ -233,7 +233,6 @@ func (c *Cluster) CallCommandOnLeader(request *raft_cmdpb.RaftCmdRequest, timeou
 				peers := region.GetPeers()
 				leader = peers[rand.Int()%len(peers)]
 				log.Warningf("leader info maybe wrong, use random leader %d of region %d", leader.GetId(), regionID)
-				log.Infof("request %s", request.String())
 			} else {
 				leader = newLeader
 				log.Debugf("use new leader %d of region %d", leader.GetId(), regionID)

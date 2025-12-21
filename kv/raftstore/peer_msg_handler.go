@@ -60,13 +60,13 @@ func (d *peerMsgHandler) HandleRaftReady() {
 				return
 			}
 		}
-		wb.WriteToDB(d.ctx.engine.Kv)
+		wb.WriteToDB(d.peerStorage.Engines.Kv)
 		rd.Advance(ready)
 	}
 }
 
 func (d *peerMsgHandler) processEntry(entry *eraftpb.Entry, wb *engine_util.WriteBatch) {
-	// log.Infof("[%s] committed entry %d ", d.Tag, entry.Index)
+	//log.Infof("[%s] committed entry %d ", d.Tag, entry.Index)
 	if len(entry.Data) == 0 {
 		return
 	}
@@ -207,8 +207,12 @@ func (d *peerMsgHandler) preProposeRaftCommand(req *raft_cmdpb.RaftCmdRequest) e
 }
 
 func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
+	if d.stopped {
+		return
+	}
 	err := d.preProposeRaftCommand(msg)
 	if err != nil {
+		log.Errorf("[%v] preProposeRaftCommand error %v", msg, err)
 		log.Panic(err)
 	}
 	// Your Code Here (2B).
@@ -236,7 +240,7 @@ func (d *peerMsgHandler) appendProposal(cb *message.Callback) {
 		term:  d.Term(),
 		cb:    cb,
 	}
-	// log.Infof("[%s] Appending proposal %d", d.Tag, proposal.index)
+	//log.Infof("[%s] Appending proposal %d", d.Tag, proposal.index)
 	d.proposals = append(d.proposals, proposal)
 }
 

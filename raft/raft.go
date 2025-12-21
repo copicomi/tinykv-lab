@@ -17,6 +17,7 @@ package raft
 import (
 	"errors"
 
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -200,7 +201,9 @@ func newRaft(c *Config) *Raft {
 			}
 		}
 	}
-	// log.Infof("raft %d Peers %+v", raft.id, raft.peers)
+	raft.electionElapsed = 0
+	raft.randomExtraElectionTime = randInt(0, raft.electionTimeout+1)
+	log.Infof("New Raft %d, state %s, term %d, vote %d, commit %d, applied %d", raft.id, raft.State.String(), raft.Term, raft.Vote, raft.RaftLog.committed, raft.RaftLog.applied)
 	return raft
 }
 

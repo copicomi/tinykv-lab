@@ -229,7 +229,7 @@ func (r *Raft) hasNewerLogThan(term uint64, index uint64) bool {
 }
 
 // Debugging
-const Debug = true
+const Debug = false
 
 func DPrintf(format string, a ...interface{}) {
 	if Debug {
@@ -267,6 +267,6 @@ func mInfo(rf *Raft, format string, a ...interface{}) {
 		}
 		prefix := fmt.Sprintf("[%d] %s%d ", rf.Term, state, rf.id)
 		format = prefix + format
-		log.Infof(format, a...)
+		log.Warningf(format, a...)
 	}
 }

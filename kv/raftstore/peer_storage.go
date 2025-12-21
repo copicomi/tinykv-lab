@@ -356,13 +356,13 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	hardState := ready.HardState
 	var result *ApplySnapResult
 	if err := ps.Append(ready.Entries, raftWB); err != nil {
-		return nil, err
+		panic(err)
 	}
 	if !raft.IsEmptyHardState(hardState) {
 		ps.raftState.HardState = &hardState
 	}
 	if err := raftWB.SetMeta(meta.RaftStateKey(ps.region.Id), ps.raftState); err != nil {
-		return nil, err
+		panic(err)
 	}
 	raftWB.MustWriteToDB(ps.Engines.Raft)
 	return result, nil

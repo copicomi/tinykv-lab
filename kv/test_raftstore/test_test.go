@@ -266,6 +266,7 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 			for i := 1; i <= nservers; i++ {
 				cluster.StartServer(uint64(i))
 			}
+			time.Sleep(2 * electionTimeout)
 		}
 
 		for cli := 0; cli < nclients; cli++ {

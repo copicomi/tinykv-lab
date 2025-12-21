@@ -27,7 +27,7 @@ func (r *Raft) becomeLeader() {
 	// Your Code Here (2A).
 	r.State = StateLeader
 	r.Lead = r.id
-	r.Vote = None
+	r.Vote = r.id
 	lastIndex := r.RaftLog.LastIndex()
 	for _, id := range r.peers {
 		r.Prs[id] = &Progress{

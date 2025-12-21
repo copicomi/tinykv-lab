@@ -5,11 +5,11 @@ import "github.com/pingcap-incubator/tinykv/log"
 func (r *Raft) startElection() {
 	// TODO: 一轮选举失败后，不需要再增加 Term
 	r.becomeCandidate()
-	// log.Infof("[%d] S%d becomeCandidate", r.Term, r.id)
+	log.Warningf("[%d] S%d becomeCandidate", r.Term, r.id)
 	r.bcastRequestVote()
 	if r.haveGotMajorVotes() {
 		r.becomeLeader()
-		log.Infof("[%d] S%d becomeLeader", r.Term, r.id)
+		log.Errorf("[%d] S%d becomeLeader", r.Term, r.id)
 	}
 }
 

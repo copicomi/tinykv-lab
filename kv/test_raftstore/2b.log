@@ -1,50 +1,50 @@
-2025/12/21 14:36:52.547206 node.go:193: [0;37m[info] start raft store node, storeID: 1[0m
-2025/12/21 14:36:52.547335 peer.go:41: [0;37m[info] region id:1 region_epoch:<conf_ver:1 version:1 > peers:<id:1 store_id:1 > peers:<id:2 store_id:2 > peers:<id:3 store_id:3 > peers:<id:4 store_id:4 > peers:<id:5 store_id:5 >  create peer with ID 1[0m
-2025/12/21 14:36:52.547410 raftstore.go:174: [0;37m[info] start store 1, region_count 1, tombstone_count 0, takes 102.803µs[0m
-2025/12/21 14:36:52.547555 node.go:193: [0;37m[info] start raft store node, storeID: 2[0m
-2025/12/21 14:36:52.547658 peer.go:41: [0;37m[info] region id:1 region_epoch:<conf_ver:1 version:1 > peers:<id:1 store_id:1 > peers:<id:2 store_id:2 > peers:<id:3 store_id:3 > peers:<id:4 store_id:4 > peers:<id:5 store_id:5 >  create peer with ID 2[0m
-2025/12/21 14:36:52.547701 raftstore.go:174: [0;37m[info] start store 2, region_count 1, tombstone_count 0, takes 70.702µs[0m
-2025/12/21 14:36:53.047925 election.go:8: [0;37m[info] [6] S5 becomeCandidate[0m
-2025/12/21 14:36:53.048039 election.go:8: [0;37m[info] [6] S3 becomeCandidate[0m
-2025/12/21 14:36:53.048244 election.go:8: [0;37m[info] [6] S4 becomeCandidate[0m
-2025/12/21 14:36:53.048344 election.go:8: [0;37m[info] [6] S1 becomeCandidate[0m
-2025/12/21 14:36:53.048455 election.go:8: [0;37m[info] [6] S2 becomeCandidate[0m
-2025/12/21 14:36:53.599280 election.go:8: [0;37m[info] [7] S1 becomeCandidate[0m
-2025/12/21 14:36:53.653210 util.go:254: [0;37m[info] [7] F2 find new leader from 1, msg=MsgRequestVote[0m
-2025/12/21 14:36:53.653299 util.go:254: [0;37m[info] [7] F5 find new leader from 1, msg=MsgRequestVote[0m
-2025/12/21 14:36:53.653232 util.go:254: [0;37m[info] [7] F3 find new leader from 1, msg=MsgRequestVote[0m
-2025/12/21 14:36:53.653325 msg_handle.go:70: [0;37m[info] [7] S3 Vote to 1[0m
-2025/12/21 14:36:53.653323 msg_handle.go:70: [0;37m[info] [7] S5 Vote to 1[0m
-2025/12/21 14:36:53.653321 util.go:254: [0;37m[info] [7] F4 find new leader from 1, msg=MsgRequestVote[0m
-2025/12/21 14:36:53.653348 msg_handle.go:70: [0;37m[info] [7] S4 Vote to 1[0m
-2025/12/21 14:36:53.653309 msg_handle.go:70: [0;37m[info] [7] S2 Vote to 1[0m
-2025/12/21 14:36:53.655736 util.go:254: [0;37m[info] [7] C1 got vote from 4[0m
-2025/12/21 14:36:53.655797 util.go:254: [0;37m[info] [7] C1 got vote from 2[0m
-2025/12/21 14:36:53.655836 util.go:254: [0;37m[info] [7] L1 become leader[0m
-2025/12/21 14:36:53.657827 util.go:254: [0;37m[info] [7] F5 find new leader from 1, msg=MsgAppend[0m
-2025/12/21 14:36:53.657885 util.go:254: [0;37m[info] [7] F3 find new leader from 1, msg=MsgAppend[0m
-2025/12/21 14:36:53.657923 util.go:254: [0;37m[info] [7] F4 find new leader from 1, msg=MsgAppend[0m
-2025/12/21 14:36:53.658035 util.go:254: [0;37m[info] [7] F2 find new leader from 1, msg=MsgAppend[0m
-2025/12/21 14:36:53.560874 cluster.go:235: [0;33m[warning] leader info maybe wrong, use random leader 3 of region 1[0m
-2025/12/21 14:36:53.560910 cluster.go:236: [0;37m[info] request header:<region_id:1 peer:<id:1 store_id:1 > region_epoch:<conf_ver:1 version:1 > > requests:<cmd_type:Put put:<cf:"default" key:"0 00000122" value:"x 0 122 y" > > [0m
-2025/12/21 14:36:53.560935 peer_msg_handler.go:181: [0;31m[error] [region 1] 3 not leader, need redirect to 1[0m
-2025/12/21 14:36:53.560950 log.go:196: region 1 is not leader
+2025/12/21 14:52:31.688427 node.go:193: [0;37m[info] start raft store node, storeID: 2[0m
+2025/12/21 14:52:31.688563 peer.go:41: [0;37m[info] region id:1 region_epoch:<conf_ver:1 version:1 > peers:<id:1 store_id:1 > peers:<id:2 store_id:2 > peers:<id:3 store_id:3 > peers:<id:4 store_id:4 > peers:<id:5 store_id:5 >  create peer with ID 2[0m
+2025/12/21 14:52:31.688624 raftstore.go:174: [0;37m[info] start store 2, region_count 1, tombstone_count 0, takes 93.588µs[0m
+2025/12/21 14:52:31.688732 node.go:193: [0;37m[info] start raft store node, storeID: 3[0m
+2025/12/21 14:52:31.688814 peer.go:41: [0;37m[info] region id:1 region_epoch:<conf_ver:1 version:1 > peers:<id:1 store_id:1 > peers:<id:2 store_id:2 > peers:<id:3 store_id:3 > peers:<id:4 store_id:4 > peers:<id:5 store_id:5 >  create peer with ID 3[0m
+2025/12/21 14:52:31.688862 raftstore.go:174: [0;37m[info] start store 3, region_count 1, tombstone_count 0, takes 65.923µs[0m
+2025/12/21 14:52:31.688933 node.go:193: [0;37m[info] start raft store node, storeID: 4[0m
+2025/12/21 14:52:31.689000 peer.go:41: [0;37m[info] region id:1 region_epoch:<conf_ver:1 version:1 > peers:<id:1 store_id:1 > peers:<id:2 store_id:2 > peers:<id:3 store_id:3 > peers:<id:4 store_id:4 > peers:<id:5 store_id:5 >  create peer with ID 4[0m
+2025/12/21 14:52:31.689044 raftstore.go:174: [0;37m[info] start store 4, region_count 1, tombstone_count 0, takes 59.584µs[0m
+2025/12/21 14:52:31.689102 node.go:193: [0;37m[info] start raft store node, storeID: 5[0m
+2025/12/21 14:52:31.689198 peer.go:41: [0;37m[info] region id:1 region_epoch:<conf_ver:1 version:1 > peers:<id:1 store_id:1 > peers:<id:2 store_id:2 > peers:<id:3 store_id:3 > peers:<id:4 store_id:4 > peers:<id:5 store_id:5 >  create peer with ID 5[0m
+2025/12/21 14:52:31.689221 raftstore.go:174: [0;37m[info] start store 5, region_count 1, tombstone_count 0, takes 71.384µs[0m
+2025/12/21 14:52:32.842791 util.go:270: [0;37m[info] [7] F5 find new candidate from 2, msg=MsgRequestVote[0m
+2025/12/21 14:52:32.842860 msg_handle.go:70: [0;37m[info] [7] S5 Vote to 2[0m
+2025/12/21 14:52:32.842810 util.go:270: [0;37m[info] [7] F3 find new candidate from 2, msg=MsgRequestVote[0m
+2025/12/21 14:52:32.842898 msg_handle.go:70: [0;37m[info] [7] S3 Vote to 2[0m
+2025/12/21 14:52:32.842903 util.go:270: [0;37m[info] [7] F4 find new candidate from 2, msg=MsgRequestVote[0m
+2025/12/21 14:52:32.842945 msg_handle.go:70: [0;37m[info] [7] S4 Vote to 2[0m
+2025/12/21 14:52:32.843166 util.go:270: [0;37m[info] [7] F1 find new candidate from 2, msg=MsgRequestVote[0m
+2025/12/21 14:52:32.843220 msg_handle.go:70: [0;37m[info] [7] S1 Vote to 2[0m
+2025/12/21 14:52:32.845141 util.go:270: [0;37m[info] [7] C2 got vote from 5[0m
+2025/12/21 14:52:32.845676 util.go:270: [0;37m[info] [7] C2 got vote from 4[0m
+2025/12/21 14:52:32.845745 util.go:270: [0;37m[info] [7] L2 become leader[0m
+2025/12/21 14:52:32.847203 util.go:270: [0;37m[info] [7] F5 find new leader from 2, msg=MsgAppend[0m
+2025/12/21 14:52:32.848478 util.go:270: [0;37m[info] [7] F1 find new leader from 2, msg=MsgAppend[0m
+2025/12/21 14:52:32.851387 util.go:270: [0;37m[info] [7] F3 find new leader from 2, msg=MsgAppend[0m
+2025/12/21 14:52:32.852328 util.go:270: [0;37m[info] [7] F4 find new leader from 2, msg=MsgAppend[0m
+2025/12/21 14:52:37.188932 cluster.go:235: [0;33m[warning] leader info maybe wrong, use random leader 5 of region 1[0m
+2025/12/21 14:52:37.188981 cluster.go:236: [0;37m[info] request header:<region_id:1 peer:<id:2 store_id:2 > region_epoch:<conf_ver:1 version:1 > > requests:<cmd_type:Snap snap:<> > [0m
+2025/12/21 14:52:37.189005 peer_msg_handler.go:181: [0;31m[error] [region 1] 5 not leader, need redirect to 2[0m
+2025/12/21 14:52:37.189013 log.go:196: region 1 is not leader
 panic: region 1 is not leader
 
-goroutine 253 [running]:
-log.(*Logger).Panic(0xc000118f30, {0xc17c275ca8?, 0x0?, 0xffffffffffffffff?})
+goroutine 277 [running]:
+log.(*Logger).Panic(0xc0000baf30, {0xc00019dca8?, 0x0?, 0xffffffffffffffff?})
 	/usr/lib/go-1.22/src/log/log.go:303 +0x65
 github.com/pingcap-incubator/tinykv/log.(*Logger).Panic(...)
 	/home/akane/tinykv/tinykv-lab/log/log.go:196
 github.com/pingcap-incubator/tinykv/log.Panic(...)
 	/home/akane/tinykv/tinykv-lab/log/log.go:85
-github.com/pingcap-incubator/tinykv/kv/raftstore.(*peerMsgHandler).proposeRaftCommand(0xc17c275e20, 0xc17f6e3680, 0xc17f666fa8)
+github.com/pingcap-incubator/tinykv/kv/raftstore.(*peerMsgHandler).proposeRaftCommand(0xc00019de20, 0xc17f998f00, 0xc17f3470e0)
 	/home/akane/tinykv/tinykv-lab/kv/raftstore/peer_msg_handler.go:211 +0x5c
-github.com/pingcap-incubator/tinykv/kv/raftstore.(*peerMsgHandler).HandleMsg(0xc17c275e20, {0xc17c275ec0?, 0x1?, {0xa95ea0?, 0xc17f9e7c70?}})
+github.com/pingcap-incubator/tinykv/kv/raftstore.(*peerMsgHandler).HandleMsg(0xc00019de20, {0xc00019dec0?, 0x1?, {0xa95ec0?, 0xc17f91ca00?}})
 	/home/akane/tinykv/tinykv-lab/kv/raftstore/peer_msg_handler.go:154 +0x175
-github.com/pingcap-incubator/tinykv/kv/raftstore.(*raftWorker).run(0xc0934622a0, 0xc00003af60, 0x0?)
+github.com/pingcap-incubator/tinykv/kv/raftstore.(*raftWorker).run(0xc00027e7e0, 0xc0000a2720, 0x0?)
 	/home/akane/tinykv/tinykv-lab/kv/raftstore/raft_worker.go:54 +0x489
-created by github.com/pingcap-incubator/tinykv/kv/raftstore.(*Raftstore).startWorkers in goroutine 26
+created by github.com/pingcap-incubator/tinykv/kv/raftstore.(*Raftstore).startWorkers in goroutine 15
 	/home/akane/tinykv/tinykv-lab/kv/raftstore/raftstore.go:270 +0x152
 exit status 2
-FAIL	github.com/pingcap-incubator/tinykv/kv/test_raftstore	5.749s
+FAIL	github.com/pingcap-incubator/tinykv/kv/test_raftstore	5.699s
