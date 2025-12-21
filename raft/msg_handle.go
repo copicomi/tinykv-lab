@@ -7,6 +7,7 @@ import (
 
 // handleAppendEntries handle AppendEntries RPC request
 func (r *Raft) handleAppendEntries(m pb.Message) {
+	mInfo(r, "handle Append From %d", m.From)
 	prev_log_index, prev_log_term, entries := m.Index, m.LogTerm, m.Entries
 	success := false
 
@@ -22,6 +23,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 }
 
 func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
+	mInfo(r, "handle AppendResp From %d", m.From)
 	if m.Reject {
 		r.Prs[m.From].Next--
 		//TODO: 大步回退
@@ -34,20 +36,23 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 	}
 	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
 	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
+	mInfo(r, "update match[%d] to %d", m.From, r.Prs[m.From].Match)
 
 }
 
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
+	mInfo(r, "handle Heartbeat From %d", m.From)
 	r.sendHeartbeatResponse(m.From)
 	r.electionElapsed = 0
 }
 
 func (r *Raft) handleHeartbeatResponse(m pb.Message) {
+	mInfo(r, "handle HeartbeatResp From %d, m.index=%d, match=%d", m.From, m.Index, r.Prs[m.From].Match)
 	// mDebug(r, "m.index=%d, l.lastindex=%d", m.Index, r.RaftLog.LastIndex())
-	if m.Index < r.RaftLog.LastIndex() {
-		r.sendAppend(m.From)
-	}
+	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
+	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
+	r.sendAppend(m.From)
 }
 
 // handleSnapshot handle Snapshot RPC request
@@ -67,7 +72,7 @@ func (r *Raft) handleRequestVote(m pb.Message) {
 	if !r.hasNewerLogThan(m.LogTerm, m.Index) && (r.Vote == None || r.Vote == m.From) {
 		granted = true
 		r.Vote = m.From
-		log.Infof("[%d] S%d Vote to %d", r.Term, r.id, r.Vote)
+		// log.Infof("[%d] S%d Vote to %d", r.Term, r.id, r.Vote)
 	}
 	r.sendRequestVoteResponse(m.From, granted)
 }

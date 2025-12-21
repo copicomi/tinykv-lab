@@ -66,6 +66,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 }
 
 func (d *peerMsgHandler) processEntry(entry *eraftpb.Entry, wb *engine_util.WriteBatch) {
+	// log.Infof("[%s] committed entry %d ", d.Tag, entry.Index)
 	if len(entry.Data) == 0 {
 		return
 	}
@@ -235,6 +236,7 @@ func (d *peerMsgHandler) appendProposal(cb *message.Callback) {
 		term:  d.Term(),
 		cb:    cb,
 	}
+	// log.Infof("[%s] Appending proposal %d", d.Tag, proposal.index)
 	d.proposals = append(d.proposals, proposal)
 }
 

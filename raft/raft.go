@@ -221,15 +221,13 @@ func (r *Raft) Step(m pb.Message) error {
 	if !IsLocalMsg(m.MsgType) && m.Term < r.Term {
 		return nil
 	}
-	if r.findAnotherLeader(m) {
-		r.becomeFollower(m.Term, None)
-		mInfo(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
-	}
-	if r.Lead == None && isWorkingWithLeader(m.MsgType) {
+	if r.findNewLeader(m) {
 		r.becomeFollower(m.Term, m.From)
 		mInfo(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
+	} else if r.findNewCandidate(m) {
+		r.becomeFollower(m.Term, None)
+		mInfo(r, "find new candidate from %d, msg=%s", m.From, m.MsgType.String())
 	}
-
 	switch r.State {
 	case StateFollower:
 		r.stepFollower(m)

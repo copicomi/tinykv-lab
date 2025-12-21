@@ -148,12 +148,28 @@ func isSoftStateEqual(a, b *SoftState) bool {
 	return a.Lead == b.Lead && a.RaftState == b.RaftState
 }
 
-func (r *Raft) findAnotherLeader(m pb.Message) bool {
+func (r *Raft) findNewLeader(m pb.Message) bool {
+	if !isWorkingWithLeader(m.MsgType) {
+		return false
+	}
 	if m.Term > r.Term {
 		return true
 	}
-	if r.State == StateCandidate && m.Term == r.Term && isWorkingWithLeader(m.MsgType) {
+	if m.Term == r.Term && r.Lead == None {
 		return true
+	}
+	return false
+}
+
+func (r *Raft) findNewCandidate(m pb.Message) bool {
+	if !isFromCandidateMsg(m.MsgType) {
+		return false
+	}
+	if m.Term > r.Term {
+		return true
+	}
+	if m.Term == r.Term && r.State != StateLeader {
+		return false
 	}
 	return false
 }
