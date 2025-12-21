@@ -7,7 +7,7 @@ import (
 
 // handleAppendEntries handle AppendEntries RPC request
 func (r *Raft) handleAppendEntries(m pb.Message) {
-	mInfo(r, "handle Append From %d", m.From)
+	mDebug(r, "handle Append From %d", m.From)
 	prev_log_index, prev_log_term, entries := m.Index, m.LogTerm, m.Entries
 	success := false
 
@@ -23,7 +23,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 }
 
 func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
-	mInfo(r, "handle AppendResp From %d", m.From)
+	mDebug(r, "handle AppendResp From %d", m.From)
 	if m.Reject {
 		r.Prs[m.From].Next--
 		//TODO: 大步回退
@@ -36,19 +36,18 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 	}
 	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
 	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
-	mInfo(r, "update match[%d] to %d", m.From, r.Prs[m.From].Match)
+	mDebug(r, "update match[%d] to %d", m.From, r.Prs[m.From].Match)
 
 }
 
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
-	mInfo(r, "handle Heartbeat From %d", m.From)
+	mDebug(r, "handle Heartbeat From %d", m.From)
 	r.sendHeartbeatResponse(m.From)
-	r.electionElapsed = 0
 }
 
 func (r *Raft) handleHeartbeatResponse(m pb.Message) {
-	mInfo(r, "handle HeartbeatResp From %d, m.index=%d, match=%d", m.From, m.Index, r.Prs[m.From].Match)
+	mDebug(r, "handle HeartbeatResp From %d, m.index=%d, match=%d", m.From, m.Index, r.Prs[m.From].Match)
 	// mDebug(r, "m.index=%d, l.lastindex=%d", m.Index, r.RaftLog.LastIndex())
 	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
 	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
@@ -85,11 +84,11 @@ func (r *Raft) handleRequestVoteResponse(m pb.Message) {
 			r.becomeFollower(r.Term, None)
 		}
 	} else {
-		mInfo(r, "got vote from %d", m.From)
+		mDebug(r, "got vote from %d", m.From)
 	}
 	if r.haveGotMajorVotes() {
 		r.becomeLeader()
-		mInfo(r, "become leader")
+		mDebug(r, "become leader")
 	}
 }
 

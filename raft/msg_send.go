@@ -31,7 +31,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 		Index:   r.Prs[to].Next - 1,
 		Commit:  r.RaftLog.committed,
 	}
-	mInfo(r, "send Append to %d, index=%d, len=%d", msg.To, msg.Index, len(entries))
+	mDebug(r, "send Append to %d, index=%d, len=%d", msg.To, msg.Index, len(entries))
 	r.msgs = append(r.msgs, msg)
 	return true
 }
@@ -45,7 +45,7 @@ func (r *Raft) sendAppendResponse(to uint64, success bool) {
 		Reject:  !success,
 		Index:   r.RaftLog.LastIndex(),
 	}
-	mInfo(r, "send AppendResponse to %d, index=%d", msg.To, msg.Index)
+	mDebug(r, "send AppendResponse to %d, index=%d", msg.To, msg.Index)
 	r.msgs = append(r.msgs, msg)
 }
 

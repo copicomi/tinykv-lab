@@ -1,12 +1,13 @@
 package raft
 
+import "github.com/pingcap-incubator/tinykv/log"
+
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.State = StateFollower
 	r.Term = term
 	r.Lead = lead
 	r.Vote = None
-	r.electionElapsed = 0
 }
 
 // becomeCandidate transform this peer's state to candidate
@@ -19,11 +20,12 @@ func (r *Raft) becomeCandidate() {
 	r.votes[r.id] = true
 	r.rejects_count = 0
 	r.Term++
-	r.electionElapsed = 0
+	// log.Warningf("[%d] S%d becomeCandidate", r.Term, r.id)
 }
 
 // becomeLeader transform this peer's state to leader
 func (r *Raft) becomeLeader() {
+	log.Warningf("[%d] S%d becomeLeader", r.Term, r.id)
 	// Your Code Here (2A).
 	r.State = StateLeader
 	r.Lead = r.id
@@ -37,5 +39,4 @@ func (r *Raft) becomeLeader() {
 	}
 	r.Step(r.nilProposeMessage())
 	// NOTE: Leader should propose a noop entry on its term
-	r.electionElapsed = 0
 }

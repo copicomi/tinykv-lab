@@ -2,12 +2,12 @@ package raft
 
 func (r *Raft) bcastHeartbeat() {
 	if r.State == StateLeader {
+		r.heartbeatElapsed = 0
 		for _, peer := range r.peers {
 			if peer != r.id {
 				r.sendHeartbeat(peer)
 			}
 		}
-		r.heartbeatElapsed = 0
 	}
 }
 

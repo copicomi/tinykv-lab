@@ -107,10 +107,14 @@ func (d *peerMsgHandler) FindProposal(index, term uint64) *proposal {
 		d.proposals = d.proposals[1:]
 		if p.index > index {
 			break
-		} else if p.index == index && p.term == term {
-			return p
-		} else {
-			NotifyStaleReq(d.Term(), p.cb)
+		} else if p.index == index {
+			if p.term < term {
+				p.cb.Done(ErrRespStaleCommand(d.Term()))
+			} else if p.term == term {
+				return p
+			} else {
+				break
+			}
 		}
 	}
 	return nil
@@ -212,8 +216,7 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 	}
 	err := d.preProposeRaftCommand(msg)
 	if err != nil {
-		log.Errorf("[%v] preProposeRaftCommand error %v", msg, err)
-		log.Panic(err)
+		cb.Done(ErrResp(err))
 	}
 	// Your Code Here (2B).
 	if len(msg.Requests) > 0 {

@@ -169,7 +169,7 @@ func (r *Raft) findNewCandidate(m pb.Message) bool {
 		return true
 	}
 	if m.Term == r.Term && r.State != StateLeader {
-		return false
+		return true
 	}
 	return false
 }
@@ -250,11 +250,11 @@ func mDebug(rf *Raft, format string, a ...interface{}) {
 		}
 		prefix := fmt.Sprintf("[%d] %s%d ", rf.Term, state, rf.id)
 		format = prefix + format
-		log.Debugf(format, a...)
+		log.Errorf(format, a...)
 	}
 }
 
-func mInfo(rf *Raft, format string, a ...interface{}) {
+func mWarning(rf *Raft, format string, a ...interface{}) {
 	if Debug {
 		var state string
 		switch rf.State {
