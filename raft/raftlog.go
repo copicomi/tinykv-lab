@@ -105,6 +105,19 @@ func (l *RaftLog) pa(va uint64) uint64 {
 // grow unlimitedly in memory
 func (l *RaftLog) maybeCompact() {
 	// Your Code Here (2C).
+	firstIndex, err := l.storage.FirstIndex()
+	if err != nil {
+		panic(err)
+	}
+	if firstIndex > l.snapshotIndex+1 {
+		l.entries = l.entries[l.pa(firstIndex):]
+		l.snapshotIndex = firstIndex - 1
+		term, err := l.storage.Term(l.snapshotIndex)
+		if err != nil {
+			panic(err)
+		}
+		l.snapshotTerm = term
+	}
 }
 
 // allEntries return all the entries not compacted.
@@ -140,14 +153,14 @@ func (l *RaftLog) LastIndex() uint64 {
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
-	offset := l.entries[0].Index
+	offset := l.snapshotIndex
 	if i < offset {
 		return 0, ErrCompacted
 	}
 	if i > l.LastIndex() {
 		return 0, ErrUnavailable
 	}
-	return l.entries[i-offset].Term, nil
+	return l.entries[l.pa(i)].Term, nil
 }
 
 func (l *RaftLog) append(entry pb.Entry) {

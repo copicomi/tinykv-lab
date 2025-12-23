@@ -104,6 +104,7 @@ func (r *Raft) sendRequestVoteResponse(to uint64, grant bool) {
 
 func (r *Raft) sendSnapshot(to uint64) bool {
 	snapshot, err := r.RaftLog.storage.Snapshot()
+
 	if err == ErrSnapshotTemporarilyUnavailable {
 		return false
 	}

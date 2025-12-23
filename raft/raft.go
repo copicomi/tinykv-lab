@@ -189,7 +189,7 @@ func newRaft(c *Config) *Raft {
 		electionTimeout:  c.ElectionTick,
 		peers:            c.peers,
 	}
-	raft.RaftLog.applied = c.Applied
+	raft.RaftLog.applied = max(c.Applied, raft.RaftLog.snapshotIndex)
 	raft.RaftLog.committed = hardState.Commit
 	if confState.GetNodes() != nil {
 		raft.peers = confState.GetNodes()

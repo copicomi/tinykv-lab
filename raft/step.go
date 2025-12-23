@@ -38,6 +38,8 @@ func (rf *Raft) stepFollower(m pb.Message) {
 		rf.handleAppendEntries(m)
 	case pb.MessageType_MsgHeartbeat:
 		rf.handleHeartbeat(m)
+	case pb.MessageType_MsgSnapshot:
+		rf.handleSnapshot(m)
 	case pb.MessageType_MsgRequestVote:
 		rf.handleRequestVote(m)
 	case pb.MessageType_MsgHup:
