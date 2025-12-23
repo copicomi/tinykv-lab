@@ -56,7 +56,9 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 
 // handleSnapshot handle Snapshot RPC request
 func (r *Raft) handleSnapshot(m pb.Message) {
-	// Your Code Here (2C).
+	mDebug(r, "handle Snapshot From %d", m.From)
+	success := r.InstallSnapshot(m.Snapshot)
+	r.sendAppendResponse(m.From, success)
 }
 
 func (r *Raft) handleBeat(m pb.Message) {

@@ -1,6 +1,13 @@
 package raft
 
-import pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+import (
+	"github.com/pingcap-incubator/tinykv/log"
+	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+)
+
+func (r *Raft) send(m pb.Message) {
+	r.msgs = append(r.msgs, m)
+}
 
 // sendAppend sends an append RPC with new entries (if any) and the
 // current commit index to the given peer. Returns true if a message was sent.
@@ -12,12 +19,10 @@ func (r *Raft) sendAppend(to uint64) bool {
 	var err error
 	if r.RaftLog.LastIndex() >= r.Prs[to].Next { // 正常更新
 		entries, err = r.RaftLog.nextEntries(r.Prs[to].Next)
-		if err != nil {
-			// err = ErrCompacted
-			// TODO: send snapshot
-			return false
+		if err == ErrCompacted { // 发送快照
+			return r.sendSnapshot(to)
 		}
-	} else {
+	} else { // 心跳
 		entries = nil
 	}
 	prev_log_term, _ := r.RaftLog.Term(r.Prs[to].Next - 1)
@@ -32,7 +37,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 		Commit:  r.RaftLog.committed,
 	}
 	mDebug(r, "send Append to %d, index=%d, len=%d", msg.To, msg.Index, len(entries))
-	r.msgs = append(r.msgs, msg)
+	r.send(msg)
 	return true
 }
 
@@ -46,7 +51,7 @@ func (r *Raft) sendAppendResponse(to uint64, success bool) {
 		Index:   r.RaftLog.LastIndex(),
 	}
 	mDebug(r, "send AppendResponse to %d, index=%d", msg.To, msg.Index)
-	r.msgs = append(r.msgs, msg)
+	r.send(msg)
 }
 
 // sendHeartbeat sends a heartbeat RPC to the given peer.
@@ -70,7 +75,7 @@ func (r *Raft) sendHeartbeatResponse(to uint64) {
 		Term:    r.Term,
 		Index:   r.RaftLog.LastIndex(),
 	}
-	r.msgs = append(r.msgs, msg)
+	r.send(msg)
 }
 
 func (r *Raft) sendRequestVote(to uint64) {
@@ -83,7 +88,7 @@ func (r *Raft) sendRequestVote(to uint64) {
 		Index:   r.RaftLog.LastIndex(),
 		LogTerm: term,
 	}
-	r.msgs = append(r.msgs, msg)
+	r.send(msg)
 }
 
 func (r *Raft) sendRequestVoteResponse(to uint64, grant bool) {
@@ -94,5 +99,25 @@ func (r *Raft) sendRequestVoteResponse(to uint64, grant bool) {
 		Term:    r.Term,
 		Reject:  !grant,
 	}
-	r.msgs = append(r.msgs, msg)
+	r.send(msg)
+}
+
+func (r *Raft) sendSnapshot(to uint64) bool {
+	snapshot, err := r.RaftLog.storage.Snapshot()
+	if err == ErrSnapshotTemporarilyUnavailable {
+		return false
+	}
+	if err != nil {
+		log.Panic(err)
+	}
+	msg := pb.Message{
+		MsgType:  pb.MessageType_MsgSnapshot,
+		From:     r.id,
+		To:       to,
+		Term:     r.Term,
+		Snapshot: &snapshot,
+	}
+	r.send(msg)
+	log.Warningf("unimplemented sendSnapshot")
+	return true
 }
