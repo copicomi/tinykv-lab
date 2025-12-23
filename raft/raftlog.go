@@ -52,7 +52,6 @@ type RaftLog struct {
 	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
-	offset uint64
 	// last index of snapshot
 	snapshotIndex uint64
 	// term
@@ -79,17 +78,26 @@ func newLog(storage Storage) *RaftLog {
 	if err != nil {
 		panic(err)
 	}
+
+	dummy_entry := pb.Entry{
+		Term:  snapshotTerm,
+		Index: first_index - 1,
+	}
+	entries = append([]pb.Entry{dummy_entry}, entries...)
 	l := &RaftLog{
 		storage:       storage,
 		applied:       first_index - 1,
 		committed:     first_index - 1,
 		stabled:       last_index,
 		entries:       entries,
-		offset:        first_index,
 		snapshotIndex: first_index - 1,
 		snapshotTerm:  snapshotTerm,
 	}
 	return l
+}
+
+func (l *RaftLog) pa(va uint64) uint64 {
+	return va - l.snapshotIndex
 }
 
 // We need to compact the log entries in some point of time like
@@ -103,23 +111,26 @@ func (l *RaftLog) maybeCompact() {
 // note, exclude any dummy entries from the return value.
 // note, this is one of the test stub functions you need to implement.
 func (l *RaftLog) allEntries() []pb.Entry {
-	return l.entries
+	return l.entries[1:]
 }
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
-	return l.entries[l.stabled+1-l.offset:]
+	// vi = pi + offset
+	// v1 = p1 + snapshot0
+	// v10 = p2 + s8
+	return l.entries[l.pa(l.stabled+1):]
 }
 
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
-	return l.entries[l.applied+1-l.offset : l.committed+1-l.offset]
+	return l.entries[l.pa(l.applied+1):l.pa(l.committed+1)]
 }
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
-	if len(l.entries) > 0 {
-		return l.offset + uint64(len(l.entries)) - 1
+	if len(l.entries) > 1 {
+		return l.entries[len(l.entries)-1].Index
 	}
 	if l.pendingSnapshot != nil {
 		return l.pendingSnapshot.Metadata.Index
@@ -129,16 +140,14 @@ func (l *RaftLog) LastIndex() uint64 {
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
-	if i == l.snapshotIndex {
-		return l.snapshotTerm, nil
-	}
-	if i < l.offset {
+	offset := l.entries[0].Index
+	if i < offset {
 		return 0, ErrCompacted
 	}
 	if i > l.LastIndex() {
 		return 0, ErrUnavailable
 	}
-	return l.entries[i-l.offset].Term, nil
+	return l.entries[i-offset].Term, nil
 }
 
 func (l *RaftLog) append(entry pb.Entry) {
@@ -151,7 +160,7 @@ func (l *RaftLog) appendEntries(entries []*pb.Entry, prev_index uint64) {
 		term, _ := l.Term(index)
 		if index <= l.LastIndex() {
 			if term != entry.Term {
-				l.entries = l.entries[:index-l.offset]
+				l.entries = l.entries[:l.pa(index)]
 				l.stabled = min(l.stabled, index-1)
 			} else {
 				continue
@@ -166,7 +175,7 @@ func (l *RaftLog) nextEntries(next uint64) ([]*pb.Entry, error) {
 	if next <= l.snapshotIndex { // offset - 1
 		return nil, ErrCompacted
 	}
-	for _, entry := range l.entries[next-l.offset:] {
+	for _, entry := range l.entries[l.pa(next):] {
 		entries = append(entries, &pb.Entry{
 			Term:  entry.Term,
 			Index: entry.Index,

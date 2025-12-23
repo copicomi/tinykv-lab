@@ -6,7 +6,6 @@ func (r *Raft) InstallSnapshot(s *pb.Snapshot) bool {
 	l := r.RaftLog
 	l.pendingSnapshot = s
 	l.applied = s.Metadata.Index
-	l.offset = s.Metadata.Index
 	l.stabled = s.Metadata.Index
 	l.entries = nil
 	l.snapshotIndex = s.Metadata.Index
@@ -14,7 +13,7 @@ func (r *Raft) InstallSnapshot(s *pb.Snapshot) bool {
 	l.pendingSnapshot = s
 	r.Prs = make(map[uint64]*Progress)
 	for _, id := range s.Metadata.ConfState.Nodes {
-		match := r.RaftLog.offset - 1
+		match := r.RaftLog.snapshotIndex
 		if id == r.id {
 			match = s.Metadata.Index
 		}

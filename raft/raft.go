@@ -195,7 +195,7 @@ func newRaft(c *Config) *Raft {
 		raft.peers = confState.GetNodes()
 		for _, pid := range raft.peers {
 			raft.Prs[pid] = &Progress{
-				Match: raft.RaftLog.offset - 1,
+				Match: raft.RaftLog.snapshotIndex,
 				Next:  raft.RaftLog.LastIndex() + 1,
 			}
 		}

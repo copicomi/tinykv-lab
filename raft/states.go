@@ -35,7 +35,7 @@ func (r *Raft) becomeLeader() {
 	lastIndex := r.RaftLog.LastIndex()
 	for _, id := range r.peers {
 		r.Prs[id] = &Progress{
-			Match: r.RaftLog.offset - 1,
+			Match: r.RaftLog.snapshotIndex,
 			Next:  lastIndex + 1,
 		}
 	}

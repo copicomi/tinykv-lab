@@ -176,7 +176,7 @@ func (r *Raft) findNewCandidate(m pb.Message) bool {
 }
 
 func (r *Raft) isMatchPrevLog(prev_log_index, prev_log_term uint64) bool {
-	if prev_log_index == r.RaftLog.offset-1 {
+	if prev_log_index == r.RaftLog.snapshotIndex && prev_log_term == r.RaftLog.snapshotTerm {
 		return true
 	}
 	if r.RaftLog.LastIndex() < prev_log_index {
