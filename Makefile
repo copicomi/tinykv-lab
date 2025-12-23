@@ -83,6 +83,11 @@ project2b:
 	$(GOTEST) ./kv/test_raftstore -run ^TestPersistPartitionUnreliable2B$ || true
 	$(TEST_CLEAN)
 
+akane2b:
+	$(TEST_CLEAN)
+	$(GOTEST) ./kv/test_raftstore -run ^TestPersistPartitionUnreliable2B$ || true
+	$(TEST_CLEAN)
+
 project2c:
 	$(TEST_CLEAN)
 	$(GOTEST) ./raft -run 2C || true

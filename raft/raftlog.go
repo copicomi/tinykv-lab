@@ -15,7 +15,6 @@
 package raft
 
 import (
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -53,8 +52,11 @@ type RaftLog struct {
 	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
-	// last index of snapshot
 	offset uint64
+	// last index of snapshot
+	snapshotIndex uint64
+	// term
+	snapshotTerm uint64
 }
 
 // newLog returns log using the given storage. It recovers the log
@@ -73,13 +75,19 @@ func newLog(storage Storage) *RaftLog {
 	if err != nil {
 		panic(err)
 	}
+	snapshotTerm, err := storage.Term(first_index - 1)
+	if err != nil {
+		panic(err)
+	}
 	l := &RaftLog{
-		storage:   storage,
-		applied:   first_index - 1,
-		committed: first_index - 1,
-		stabled:   last_index,
-		entries:   entries,
-		offset:    first_index,
+		storage:       storage,
+		applied:       first_index - 1,
+		committed:     first_index - 1,
+		stabled:       last_index,
+		entries:       entries,
+		offset:        first_index,
+		snapshotIndex: first_index - 1,
+		snapshotTerm:  snapshotTerm,
 	}
 	return l
 }
@@ -110,11 +118,20 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
-	return l.offset + uint64(len(l.entries)) - 1
+	if len(l.entries) > 0 {
+		return l.offset + uint64(len(l.entries)) - 1
+	}
+	if l.pendingSnapshot != nil {
+		return l.pendingSnapshot.Metadata.Index
+	}
+	return l.snapshotIndex
 }
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
+	if i == l.snapshotIndex {
+		return l.snapshotTerm, nil
+	}
 	if i < l.offset {
 		return 0, ErrCompacted
 	}
@@ -146,11 +163,8 @@ func (l *RaftLog) appendEntries(entries []*pb.Entry, prev_index uint64) {
 
 func (l *RaftLog) nextEntries(next uint64) ([]*pb.Entry, error) {
 	entries := make([]*pb.Entry, 0)
-	if next+1 < l.offset {
+	if next <= l.snapshotIndex { // offset - 1
 		return nil, ErrCompacted
-	}
-	if next-l.offset < 0 {
-		log.Panicf("nextEntries: %d, %d", next, l.offset)
 	}
 	for _, entry := range l.entries[next-l.offset:] {
 		entries = append(entries, &pb.Entry{

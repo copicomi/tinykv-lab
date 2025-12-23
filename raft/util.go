@@ -43,7 +43,8 @@ func max(a, b uint64) uint64 {
 }
 
 func randInt(a, b int) int {
-	return a + int(rand.Uint32())%(b-a)
+	res := a + int(rand.Uint32())%(b-a)
+	return res
 }
 
 // IsEmptyHardState returns true if the given HardState is empty.
@@ -168,7 +169,7 @@ func (r *Raft) findNewCandidate(m pb.Message) bool {
 	if m.Term > r.Term {
 		return true
 	}
-	if m.Term == r.Term && r.State != StateLeader {
+	if m.Term == r.Term && r.State == StateFollower && r.Vote == None {
 		return true
 	}
 	return false

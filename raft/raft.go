@@ -17,7 +17,6 @@ package raft
 import (
 	"errors"
 
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -202,8 +201,8 @@ func newRaft(c *Config) *Raft {
 		}
 	}
 	raft.electionElapsed = 0
-	raft.randomExtraElectionTime = randInt(0, raft.electionTimeout+1)
-	log.Infof("New Raft %d, state %s, term %d, vote %d, commit %d, applied %d", raft.id, raft.State.String(), raft.Term, raft.Vote, raft.RaftLog.committed, raft.RaftLog.applied)
+	raft.randomExtraElectionTime = randInt(0, raft.electionTimeout)
+	// log.Infof("New Raft %d, state %s, term %d, vote %d, commit %d, applied %d", raft.id, raft.State.String(), raft.Term, raft.Vote, raft.RaftLog.committed, raft.RaftLog.applied)
 	return raft
 }
 
@@ -226,10 +225,10 @@ func (r *Raft) Step(m pb.Message) error {
 	}
 	if r.findNewLeader(m) {
 		r.becomeFollower(m.Term, m.From)
-		mDebug(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
+		// mDebug(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
 	} else if r.findNewCandidate(m) {
 		r.becomeFollower(m.Term, None)
-		mDebug(r, "find new candidate from %d, msg=%s", m.From, m.MsgType.String())
+		// mDebug(r, "find new candidate from %d, msg=%s", m.From, m.MsgType.String())
 	}
 	switch r.State {
 	case StateFollower:

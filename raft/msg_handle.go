@@ -28,7 +28,7 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 		r.Prs[m.From].Next--
 		//TODO: 大步回退
 
-		if r.Prs[m.From].Next < 0 {
+		if r.Prs[m.From].Next < r.RaftLog.offset {
 			log.Errorf("raft %d: next of peer %d = %d", r.id, m.From, r.Prs[m.From].Next)
 		}
 		r.sendAppend(m.From)

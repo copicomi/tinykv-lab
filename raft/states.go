@@ -5,9 +5,11 @@ import "github.com/pingcap-incubator/tinykv/log"
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.State = StateFollower
-	r.Term = term
 	r.Lead = lead
-	r.Vote = None
+	if term > r.Term {
+		r.Vote = None
+	}
+	r.Term = term
 }
 
 // becomeCandidate transform this peer's state to candidate

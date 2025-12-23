@@ -3,7 +3,7 @@ package raft
 func (r *Raft) startElection() {
 	// TODO: 一轮选举失败后，不需要再增加 Term
 	r.electionElapsed = 0
-	r.randomExtraElectionTime = randInt(0, r.electionTimeout+1)
+	r.randomExtraElectionTime = randInt(0, r.electionTimeout)
 	r.becomeCandidate()
 	r.bcastRequestVote()
 	if r.haveGotMajorVotes() {
