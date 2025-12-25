@@ -189,6 +189,15 @@ func (r *Raft) isMatchPrevLog(prev_log_index, prev_log_term uint64) bool {
 	return term == prev_log_term
 }
 
+func (r *Raft) isInPeers(peers []uint64) bool {
+	for _, id := range peers {
+		if id == r.id {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Raft) nilEntry() pb.Entry {
 	return pb.Entry{
 		Term:  r.Term,

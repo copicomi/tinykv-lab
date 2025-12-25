@@ -15,11 +15,16 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 // becomeCandidate transform this peer's state to candidate
 func (r *Raft) becomeCandidate() {
 	r.State = StateCandidate
-	r.Vote = r.id
+	r.Vote = None
+	// 自己不一定在 peer 集群里
 	for _, peer := range r.peers {
-		r.votes[peer] = false
+		if peer == r.id {
+			r.votes[peer] = true
+			r.Vote = r.id
+		} else {
+			r.votes[peer] = false
+		}
 	}
-	r.votes[r.id] = true
 	r.rejects_count = 0
 	r.Term++
 	// log.Warningf("[%d] S%d becomeCandidate", r.Term, r.id)

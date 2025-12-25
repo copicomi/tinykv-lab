@@ -188,6 +188,9 @@ func newRaft(c *Config) *Raft {
 		heartbeatTimeout: c.HeartbeatTick,
 		electionTimeout:  c.ElectionTick,
 		peers:            c.peers,
+		leadTransferee:   None,
+		electionElapsed:  0,
+		heartbeatElapsed: 0,
 	}
 	raft.RaftLog.applied = max(c.Applied, raft.RaftLog.snapshotIndex)
 	raft.RaftLog.committed = hardState.Commit
@@ -200,7 +203,6 @@ func newRaft(c *Config) *Raft {
 			}
 		}
 	}
-	raft.electionElapsed = 0
 	raft.randomExtraElectionTime = randInt(0, raft.electionTimeout)
 	// log.Infof("New Raft %d, state %s, term %d, vote %d, commit %d, applied %d", raft.id, raft.State.String(), raft.Term, raft.Vote, raft.RaftLog.committed, raft.RaftLog.applied)
 	return raft
