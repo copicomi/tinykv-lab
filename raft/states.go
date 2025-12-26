@@ -1,11 +1,10 @@
 package raft
 
-import "github.com/pingcap-incubator/tinykv/log"
-
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.State = StateFollower
 	r.Lead = lead
+	r.leadTransferee = None
 	if term > r.Term {
 		r.Vote = None
 	}
@@ -16,6 +15,7 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 func (r *Raft) becomeCandidate() {
 	r.State = StateCandidate
 	r.Vote = None
+	r.leadTransferee = None
 	// 自己不一定在 peer 集群里
 	for _, peer := range r.peers {
 		if peer == r.id {
@@ -32,9 +32,10 @@ func (r *Raft) becomeCandidate() {
 
 // becomeLeader transform this peer's state to leader
 func (r *Raft) becomeLeader() {
-	log.Warningf("[%d] S%d becomeLeader", r.Term, r.id)
+	// log.Debugf("[%d] S%d becomeLeader", r.Term, r.id)
 	// Your Code Here (2A).
 	r.State = StateLeader
+	r.leadTransferee = None
 	r.Lead = r.id
 	r.Vote = r.id
 	lastIndex := r.RaftLog.LastIndex()

@@ -26,6 +26,3 @@ func (r *Raft) bcastAppend() {
 		}
 	}
 }
-func (r *Raft) bcastApply() {
-
-}

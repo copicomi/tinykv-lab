@@ -27,8 +27,12 @@ func (r *Raft) haveGotMajorVotes() bool {
 func (r *Raft) tickLeader() {
 	r.electionElapsed++
 	r.heartbeatElapsed++
+	r.transferElapsed++
 	if r.heartbeatElapsed >= r.heartbeatTimeout {
 		r.bcastHeartbeat()
+	}
+	if r.transferElapsed >= r.electionTimeout && r.leadTransferee != None {
+		r.leadTransferee = None
 	}
 }
 

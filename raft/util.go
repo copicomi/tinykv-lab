@@ -124,7 +124,10 @@ func (p uint64Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p uint64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func IsLocalMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MessageType_MsgHup || msgt == pb.MessageType_MsgBeat || msgt == pb.MessageType_MsgPropose
+	return msgt == pb.MessageType_MsgHup ||
+		msgt == pb.MessageType_MsgBeat ||
+		msgt == pb.MessageType_MsgPropose ||
+		msgt == pb.MessageType_MsgTransferLeader
 }
 
 func IsResponseMsg(msgt pb.MessageType) bool {
@@ -134,7 +137,8 @@ func IsResponseMsg(msgt pb.MessageType) bool {
 func isWorkingWithLeader(msgt pb.MessageType) bool {
 	return msgt == pb.MessageType_MsgAppend ||
 		msgt == pb.MessageType_MsgHeartbeat ||
-		msgt == pb.MessageType_MsgSnapshot
+		msgt == pb.MessageType_MsgSnapshot ||
+		msgt == pb.MessageType_MsgTimeoutNow
 }
 
 func isFromCandidateMsg(msgt pb.MessageType) bool {
@@ -189,9 +193,9 @@ func (r *Raft) isMatchPrevLog(prev_log_index, prev_log_term uint64) bool {
 	return term == prev_log_term
 }
 
-func (r *Raft) isInPeers(peers []uint64) bool {
-	for _, id := range peers {
-		if id == r.id {
+func (r *Raft) isInPeers(id uint64, peers []uint64) bool {
+	for _, pid := range peers {
+		if pid == id {
 			return true
 		}
 	}
@@ -236,6 +240,11 @@ func (r *Raft) hasNewerLogThan(term uint64, index uint64) bool {
 		return false
 	}
 	return true
+}
+
+func (r *Raft) isReadyToTransferLeader(to uint64) bool {
+	return r.State == StateLeader && r.leadTransferee != None &&
+		r.leadTransferee == to && r.Prs[to].Match == r.RaftLog.LastIndex()
 }
 
 // Debugging

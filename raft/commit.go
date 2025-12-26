@@ -21,7 +21,6 @@ func (rf *Raft) UpdateCommitIndex() {
 	if commit_term == rf.Term {
 		rf.RaftLog.committed = l
 		rf.bcastAppend()
-		rf.bcastApply()
 	}
 }
 

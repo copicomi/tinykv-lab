@@ -122,3 +122,23 @@ func (r *Raft) sendSnapshot(to uint64) bool {
 	log.Warningf("unimplemented sendSnapshot")
 	return true
 }
+
+func (r *Raft) sendTimeoutNow(to uint64) {
+	msg := pb.Message{
+		MsgType: pb.MessageType_MsgTimeoutNow,
+		From:    r.id,
+		To:      to,
+		Term:    r.Term,
+	}
+	r.send(msg)
+}
+
+func (r *Raft) sendTransferLeader(to uint64, tranferLead uint64) {
+	msg := pb.Message{
+		MsgType: pb.MessageType_MsgTransferLeader,
+		From:    tranferLead,
+		To:      to,
+		// term 0 because it's a local message
+	}
+	r.send(msg)
+}

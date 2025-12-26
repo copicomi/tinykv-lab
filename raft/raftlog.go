@@ -107,15 +107,15 @@ func (l *RaftLog) maybeCompact() {
 	// Your Code Here (2C).
 	firstIndex, err := l.storage.FirstIndex()
 	if err != nil {
-		panic(err)
+		return
 	}
 	if firstIndex > l.snapshotIndex+1 {
-		l.entries = l.entries[l.pa(firstIndex):]
-		l.snapshotIndex = firstIndex - 1
 		term, err := l.storage.Term(l.snapshotIndex)
 		if err != nil {
-			panic(err)
+			return
 		}
+		l.entries = l.entries[l.pa(firstIndex):]
+		l.snapshotIndex = firstIndex - 1
 		l.snapshotTerm = term
 	}
 }

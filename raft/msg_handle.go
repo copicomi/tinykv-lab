@@ -37,6 +37,10 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
 	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
 	mDebug(r, "update match[%d] to %d", m.From, r.Prs[m.From].Match)
+	// If transferring leadership and transferee caught up, trigger timeout now.
+	if r.isReadyToTransferLeader(m.From) {
+		r.sendTimeoutNow(m.From)
+	}
 
 }
 
@@ -52,6 +56,10 @@ func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)
 	r.Prs[m.From].Next = r.Prs[m.From].Match + 1
 	r.sendAppend(m.From)
+	// Heartbeat acknowledged; if transferee is caught up, trigger leadership transfer.
+	if r.isReadyToTransferLeader(m.From) {
+		r.sendTimeoutNow(m.From)
+	}
 }
 
 // handleSnapshot handle Snapshot RPC request
@@ -99,17 +107,79 @@ func (r *Raft) handleHup(m pb.Message) {
 }
 
 func (r *Raft) handlePropose(m pb.Message) {
-	if r.State == StateLeader {
-		for _, entry := range m.Entries {
-			entry := &pb.Entry{
-				Term:  r.Term,
-				Index: r.RaftLog.LastIndex() + 1,
-				Data:  entry.Data,
-			}
-			r.RaftLog.append(*entry)
-		}
-		r.Prs[r.id].Match = r.RaftLog.LastIndex()
-		r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
-		r.bcastAppend()
+	if r.State != StateLeader {
+		return
 	}
+	if r.leadTransferee != None { // leader transfering, reject new proposals
+		log.Warning("raft dropped proposal while transferring leader")
+		return
+	}
+	for _, ent := range m.Entries {
+		if ent.EntryType == pb.EntryType_EntryConfChange {
+			// Only one pending conf change is allowed at a time.
+			if r.PendingConfIndex != 0 && r.RaftLog.committed < r.PendingConfIndex {
+				return
+			}
+			r.PendingConfIndex = r.RaftLog.LastIndex() + 1
+		}
+		newEnt := pb.Entry{
+			EntryType: ent.EntryType,
+			Term:      r.Term,
+			Index:     r.RaftLog.LastIndex() + 1,
+			Data:      ent.Data,
+		}
+		r.RaftLog.append(newEnt)
+	}
+	r.Prs[r.id].Match = r.RaftLog.LastIndex()
+	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
+	r.bcastAppend()
+}
+
+func (r *Raft) handleTransferLeader(m pb.Message) {
+	// Your Code Here (3A).
+	target := m.From
+	if target == None || !r.isInPeers(target, r.peers) {
+		return
+	}
+
+	if r.State != StateLeader {
+		if r.Lead != None { // forward to leader
+			r.sendTransferLeader(r.Lead, target)
+		}
+		return
+	}
+
+	// Ignore requests to self but clear any pending transfer so proposals can proceed.
+	if target == r.id {
+		r.leadTransferee = None
+		return
+	}
+
+	// If a different transfer is pending, override it with the new target.
+	if r.leadTransferee == target {
+		return
+	}
+	r.leadTransferee = target
+	r.transferElapsed = 0
+
+	if r.isReadyToTransferLeader(target) {
+		r.sendTimeoutNow(target)
+	} else {
+		// Ask target to catch up first.
+		r.sendAppend(target)
+	}
+
+}
+
+func (r *Raft) handleTimeoutNow(m pb.Message) {
+	// Your Code Here (3A).
+	if !r.isInPeers(r.id, r.peers) {
+		return
+	}
+	msg := pb.Message{
+		MsgType: pb.MessageType_MsgHup,
+		From:    r.id,
+		To:      r.id,
+	}
+	r.Step(msg)
 }

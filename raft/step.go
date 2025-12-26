@@ -14,6 +14,10 @@ func (rf *Raft) stepLeader(m pb.Message) {
 		rf.handleHeartbeatResponse(m)
 	case pb.MessageType_MsgRequestVote:
 		rf.handleRequestVote(m)
+	case pb.MessageType_MsgTransferLeader:
+		rf.handleTransferLeader(m)
+	case pb.MessageType_MsgTimeoutNow:
+		rf.handleTimeoutNow(m)
 	}
 }
 
@@ -29,6 +33,10 @@ func (rf *Raft) stepCandidate(m pb.Message) {
 		rf.handleHeartbeat(m)
 	case pb.MessageType_MsgRequestVote:
 		rf.handleRequestVote(m)
+	case pb.MessageType_MsgTransferLeader:
+		rf.handleTransferLeader(m)
+	case pb.MessageType_MsgTimeoutNow:
+		rf.handleTimeoutNow(m)
 	}
 }
 
@@ -44,5 +52,9 @@ func (rf *Raft) stepFollower(m pb.Message) {
 		rf.handleRequestVote(m)
 	case pb.MessageType_MsgHup:
 		rf.handleHup(m)
+	case pb.MessageType_MsgTransferLeader:
+		rf.handleTransferLeader(m)
+	case pb.MessageType_MsgTimeoutNow:
+		rf.handleTimeoutNow(m)
 	}
 }

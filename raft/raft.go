@@ -166,6 +166,9 @@ type Raft struct {
 
 	//
 	rejects_count int
+
+	//
+	transferElapsed int
 }
 
 // newRaft return a raft peer with the given config
@@ -191,16 +194,17 @@ func newRaft(c *Config) *Raft {
 		leadTransferee:   None,
 		electionElapsed:  0,
 		heartbeatElapsed: 0,
+		PendingConfIndex: 0,
 	}
 	raft.RaftLog.applied = max(c.Applied, raft.RaftLog.snapshotIndex)
 	raft.RaftLog.committed = hardState.Commit
 	if confState.GetNodes() != nil {
 		raft.peers = confState.GetNodes()
-		for _, pid := range raft.peers {
-			raft.Prs[pid] = &Progress{
-				Match: raft.RaftLog.snapshotIndex,
-				Next:  raft.RaftLog.LastIndex() + 1,
-			}
+	}
+	for _, pid := range raft.peers {
+		raft.Prs[pid] = &Progress{
+			Match: raft.RaftLog.snapshotIndex,
+			Next:  raft.RaftLog.LastIndex() + 1,
 		}
 	}
 	raft.randomExtraElectionTime = randInt(0, raft.electionTimeout)
@@ -254,9 +258,25 @@ func (r *Raft) Step(m pb.Message) error {
 // addNode add a new node to raft group
 func (r *Raft) addNode(id uint64) {
 	// Your Code Here (3A).
+	if _, ok := r.Prs[id]; !ok {
+		r.Prs[id] = &Progress{
+			Match: r.RaftLog.snapshotIndex,
+			Next:  r.RaftLog.LastIndex() + 1,
+		}
+		r.peers = nodes(r)
+	}
+	if r.State == StateLeader {
+		r.bcastAppend()
+	}
 }
 
 // removeNode remove a node from raft group
 func (r *Raft) removeNode(id uint64) {
 	// Your Code Here (3A).
+	delete(r.Prs, id)
+	r.peers = nodes(r)
+	if r.State == StateLeader {
+		r.UpdateCommitIndex()
+		r.bcastAppend()
+	}
 }
