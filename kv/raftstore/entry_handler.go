@@ -18,6 +18,7 @@ func (d *peerMsgHandler) processEntry(entry *eraftpb.Entry, wb *engine_util.Writ
 	case eraftpb.EntryType_EntryNormal:
 		d.handleNormalEntry(entry, wb)
 	case eraftpb.EntryType_EntryConfChange:
+		d.handleConfChangeEntry(entry, wb)
 	}
 }
 
@@ -27,12 +28,14 @@ func (d *peerMsgHandler) handleNormalEntry(entry *eraftpb.Entry, wb *engine_util
 		log.Panic(err)
 	}
 	log.Debug(msg)
-
 	if msg.AdminRequest != nil {
 		d.handleAdminCmdRequest(msg.AdminRequest, wb)
 	} else {
 		d.handleNormalCmdRequest(entry, msg, wb)
 	}
+}
+
+func (d *peerMsgHandler) handleConfChangeEntry(entry *eraftpb.Entry, wb *engine_util.WriteBatch) {
 
 }
 
@@ -43,70 +46,52 @@ func (d *peerMsgHandler) handleNormalCmdRequest(entry *eraftpb.Entry, msg *raft_
 	}
 	p := d.FindProposal(entry.Index, entry.Term)
 	for _, req := range msg.Requests {
-		resp, err := d.handleRaftRequest(req, wb)
+		resp, err := d.handleRaftRequest(req, wb, p)
 		if err != nil {
-			// read fail
-			if p != nil {
-				p.cb.Done(ErrResp(err))
-			}
+			reply = ErrResp(err)
+			break
 		}
 		reply.Responses = append(reply.Responses, resp)
-		if p != nil && req.CmdType == raft_cmdpb.CmdType_Snap {
-			p.cb.Txn = d.peerStorage.Engines.Kv.NewTransaction(false)
-		}
 	}
 	if p != nil {
 		p.cb.Done(reply)
 	}
 	d.peerStorage.applyState.AppliedIndex = entry.Index
 	wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
+	// TODO: 是否应该分批写入 DB？
 }
 func (d *peerMsgHandler) handleAdminCmdRequest(adminReq *raft_cmdpb.AdminRequest, wb *engine_util.WriteBatch) {
 	switch adminReq.CmdType {
 	case raft_cmdpb.AdminCmdType_CompactLog:
-		compact_log := adminReq.GetCompactLog()
-		if compact_log.GetCompactIndex() < d.peerStorage.applyState.TruncatedState.Index {
-			return
-		}
-		d.peerStorage.applyState.TruncatedState.Index = compact_log.GetCompactIndex()
-		d.peerStorage.applyState.TruncatedState.Term = compact_log.GetCompactTerm()
-		if err := wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState); err != nil {
-			log.Panic(err)
-		}
-		d.ScheduleCompactLog(compact_log.GetCompactIndex())
+		d.handleAdminCompactLog(adminReq.GetCompactLog(), wb)
 	default:
 		log.Warningf("unknown admin command %v", adminReq.CmdType)
 	}
 }
 
 func (d *peerMsgHandler) handleRaftRequest(req *raft_cmdpb.Request,
-	wb *engine_util.WriteBatch) (*raft_cmdpb.Response, error) {
-	resp := &raft_cmdpb.Response{}
-	resp.CmdType = req.CmdType
+	wb *engine_util.WriteBatch, p *proposal) (*raft_cmdpb.Response, error) {
+	resp := &raft_cmdpb.Response{
+		CmdType: req.CmdType,
+	}
+	var err error
 	switch req.CmdType {
 	case raft_cmdpb.CmdType_Get:
-		req_get := req.GetGet()
-		ans, err := engine_util.GetCF(d.ctx.engine.Kv, req_get.GetCf(), req_get.GetKey())
-		if err != nil {
-			return nil, err
-		}
-		resp.Get = &raft_cmdpb.GetResponse{Value: ans}
+		resp.Get, err = d.handleNormalGet(req.GetGet())
 	case raft_cmdpb.CmdType_Put:
-		req_put := req.GetPut()
-		wb.SetCF(req_put.GetCf(), req_put.GetKey(), req_put.GetValue())
-		resp.Put = &raft_cmdpb.PutResponse{}
+		resp.Put = d.handleNormalPut(req.GetPut(), wb)
 	case raft_cmdpb.CmdType_Delete:
-		req_delete := req.GetDelete()
-		wb.DeleteCF(req_delete.GetCf(), req_delete.GetKey())
-		resp.Delete = &raft_cmdpb.DeleteResponse{}
+		resp.Delete = d.handleNormalDelete(req.GetDelete(), wb)
 	case raft_cmdpb.CmdType_Snap:
-		resp.Snap = &raft_cmdpb.SnapResponse{Region: d.Region()}
-		// TODO: snapshot (2C)
+		resp.Snap = d.handleNormalSnap(req.GetSnap(), wb, p)
+	}
+	if err != nil {
+		return nil, err
 	}
 	return resp, nil
 }
-func (d *peerMsgHandler) proposeRequestNormal(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
-	d.appendProposal(cb)
+
+func (d *peerMsgHandler) proposeRequestMessage(msg *raft_cmdpb.RaftCmdRequest) {
 	data, err := msg.Marshal()
 	if err != nil {
 		log.Panic(err)
@@ -115,21 +100,23 @@ func (d *peerMsgHandler) proposeRequestNormal(msg *raft_cmdpb.RaftCmdRequest, cb
 		log.Panic(err)
 	}
 }
+func (d *peerMsgHandler) proposeRequestNormal(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
+	d.appendProposal(cb)
+	d.proposeRequestMessage(msg)
+}
 
-func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest) {
+func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	if msg.AdminRequest == nil {
 		log.Warning("msg must contain admin request")
 		return
 	}
 	switch msg.AdminRequest.CmdType {
 	case raft_cmdpb.AdminCmdType_CompactLog:
-		data, err := msg.Marshal()
-		if err != nil {
-			log.Panic("error Marshal admin request", err)
-		}
-		if err := d.RaftGroup.Propose(data); err != nil {
-			log.Panic(err)
-		}
+		// 没有 callback 函数
+		d.proposeRequestMessage(msg)
+	case raft_cmdpb.AdminCmdType_TransferLeader:
+		reply := d.handleAdminTransferLeader(msg.AdminRequest.TransferLeader)
+		cb.Done(reply)
 	}
 }
 func (d *peerMsgHandler) FindProposal(index, term uint64) *proposal {

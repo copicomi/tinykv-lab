@@ -126,12 +126,13 @@ func (p uint64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func IsLocalMsg(msgt pb.MessageType) bool {
 	return msgt == pb.MessageType_MsgHup ||
 		msgt == pb.MessageType_MsgBeat ||
-		msgt == pb.MessageType_MsgPropose ||
-		msgt == pb.MessageType_MsgTransferLeader
+		msgt == pb.MessageType_MsgPropose
 }
 
 func IsResponseMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MessageType_MsgAppendResponse || msgt == pb.MessageType_MsgRequestVoteResponse || msgt == pb.MessageType_MsgHeartbeatResponse
+	return msgt == pb.MessageType_MsgAppendResponse ||
+		msgt == pb.MessageType_MsgRequestVoteResponse ||
+		msgt == pb.MessageType_MsgHeartbeatResponse
 }
 
 func isWorkingWithLeader(msgt pb.MessageType) bool {

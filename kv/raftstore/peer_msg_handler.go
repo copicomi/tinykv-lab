@@ -140,7 +140,7 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 		d.proposeRequestNormal(msg, cb)
 	} else {
 		// admin request
-		d.proposeAdminRequest(msg)
+		d.proposeAdminRequest(msg, cb)
 	}
 }
 

@@ -227,7 +227,9 @@ func (r *Raft) tick() {
 func (r *Raft) Step(m pb.Message) error {
 	// Step() 应该提前做出与状态无关的判断，保证执行 handleXXX() 一定是合法的
 	if !IsLocalMsg(m.MsgType) && m.Term < r.Term {
-		return nil
+		if m.MsgType != pb.MessageType_MsgTransferLeader { // transfer leader 需要进行转发，属于特殊的 local message
+			return nil
+		}
 	}
 	if r.findNewLeader(m) {
 		r.becomeFollower(m.Term, m.From)
@@ -268,6 +270,7 @@ func (r *Raft) addNode(id uint64) {
 	if r.State == StateLeader {
 		r.bcastAppend()
 	}
+	r.PendingConfIndex = 0
 }
 
 // removeNode remove a node from raft group
@@ -279,4 +282,5 @@ func (r *Raft) removeNode(id uint64) {
 		r.UpdateCommitIndex()
 		r.bcastAppend()
 	}
+	r.PendingConfIndex = 0
 }
