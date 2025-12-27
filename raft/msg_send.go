@@ -20,6 +20,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 	if r.RaftLog.LastIndex() >= r.Prs[to].Next { // 正常更新
 		entries, err = r.RaftLog.nextEntries(r.Prs[to].Next)
 		if err == ErrCompacted { // 发送快照
+			log.Warningf("%d try send snapshot to %d", r.id, to)
 			return r.sendSnapshot(to)
 		}
 	} else { // 心跳
@@ -57,12 +58,19 @@ func (r *Raft) sendAppendResponse(to uint64, success bool) {
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
 	// Your Code Here (2A).
+	commit := r.RaftLog.committed
+	if pr, ok := r.Prs[to]; ok && pr.Match == 0 {
+		// 我们只在 AddNode 时将 Match 设为 0
+		// 此时将 commit 设为 0，用于指示 worker 初始化 peer
+		// 这里的判断见 kv/raftstore/util.go:IsInitialMsg()
+		commit = 0
+	}
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeat,
 		From:    r.id,
 		To:      to,
 		Term:    r.Term,
-		Commit:  r.RaftLog.committed,
+		Commit:  commit,
 	}
 	r.msgs = append(r.msgs, msg)
 }

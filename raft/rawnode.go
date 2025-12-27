@@ -17,7 +17,6 @@ package raft
 import (
 	"errors"
 
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -107,10 +106,6 @@ func (rn *RawNode) Campaign() error {
 
 // Propose proposes data be appended to the raft log.
 func (rn *RawNode) Propose(data []byte) error {
-	if rn.Raft.leadTransferee != None {
-		log.Warning(ErrProposalDropped)
-		return ErrProposalDropped
-	}
 	ent := pb.Entry{Data: data}
 	return rn.Raft.Step(pb.Message{
 		MsgType: pb.MessageType_MsgPropose,
@@ -120,10 +115,6 @@ func (rn *RawNode) Propose(data []byte) error {
 
 // ProposeConfChange proposes a config change.
 func (rn *RawNode) ProposeConfChange(cc pb.ConfChange) error {
-	if rn.Raft.leadTransferee != None {
-		log.Warning(ErrProposalDropped)
-		return ErrProposalDropped
-	}
 	data, err := cc.Marshal()
 	if err != nil {
 		return err

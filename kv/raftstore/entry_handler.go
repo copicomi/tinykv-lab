@@ -3,9 +3,12 @@ package raftstore
 import (
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/message"
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/meta"
+	"github.com/pingcap-incubator/tinykv/kv/raftstore/runner"
+	"github.com/pingcap-incubator/tinykv/kv/raftstore/util"
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/log"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+	"github.com/pingcap-incubator/tinykv/proto/pkg/metapb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
 )
 
@@ -28,6 +31,7 @@ func (d *peerMsgHandler) handleNormalEntry(entry *eraftpb.Entry, wb *engine_util
 		log.Panic(err)
 	}
 	log.Debug(msg)
+	// log.Infof("[%s] processing entry index=%d, has admin request: %v", d.Tag, entry.Index, msg.AdminRequest != nil)
 	if msg.AdminRequest != nil {
 		d.handleAdminCmdRequest(msg.AdminRequest, wb)
 	} else {
@@ -36,7 +40,44 @@ func (d *peerMsgHandler) handleNormalEntry(entry *eraftpb.Entry, wb *engine_util
 }
 
 func (d *peerMsgHandler) handleConfChangeEntry(entry *eraftpb.Entry, wb *engine_util.WriteBatch) {
+	// TODO: Commit 完成后更新配置
+	cc := eraftpb.ConfChange{}
+	if err := cc.Unmarshal(entry.Data); err != nil {
+		log.Panic(err)
+	}
+	msg := &raft_cmdpb.RaftCmdRequest{}
+	if err := msg.Unmarshal(cc.Context); err != nil {
+		log.Panic(err)
+	}
+	reply := &raft_cmdpb.RaftCmdResponse{
+		Header: &raft_cmdpb.RaftResponseHeader{},
+	}
+	p := d.FindProposal(entry.Index, entry.Term)
+	if err := util.CheckRegionEpoch(msg, d.Region(), true); err != nil {
+		reply = ErrResp(err)
+	} else {
+		// log.Warningf("[%s] conf change Epoch %+v", d.Tag, msg.Header.GetRegionEpoch())
+		d.RaftGroup.ApplyConfChange(cc)
+		reply = d.handleAdminChangePeer(msg.AdminRequest.GetChangePeer(), wb)
+		d.notifyHeartbeatScheduler(d.Region(), d.peer)
+	}
+	if p != nil {
+		p.cb.Done(reply)
+	}
+}
 
+func (d *peerMsgHandler) notifyHeartbeatScheduler(region *metapb.Region, peer *peer) {
+	clonedRegion := new(metapb.Region)
+	err := util.CloneMsg(region, clonedRegion)
+	if err != nil {
+		return
+	}
+	d.ctx.schedulerTaskSender <- &runner.SchedulerRegionHeartbeatTask{
+		Region:          clonedRegion,
+		Peer:            peer.Meta,
+		PendingPeers:    peer.CollectPendingPeers(),
+		ApproximateSize: peer.ApproximateSize,
+	}
 }
 
 func (d *peerMsgHandler) handleNormalCmdRequest(entry *eraftpb.Entry, msg *raft_cmdpb.RaftCmdRequest, wb *engine_util.WriteBatch) {
@@ -45,6 +86,9 @@ func (d *peerMsgHandler) handleNormalCmdRequest(entry *eraftpb.Entry, msg *raft_
 		Header:    &raft_cmdpb.RaftResponseHeader{},
 	}
 	p := d.FindProposal(entry.Index, entry.Term)
+	if p == nil {
+		// log.Warnf("[%s] proposal not found for entry index=%d term=%d", d.Tag, entry.Index, entry.Term)
+	}
 	for _, req := range msg.Requests {
 		resp, err := d.handleRaftRequest(req, wb, p)
 		if err != nil {
@@ -52,6 +96,7 @@ func (d *peerMsgHandler) handleNormalCmdRequest(entry *eraftpb.Entry, msg *raft_
 			break
 		}
 		reply.Responses = append(reply.Responses, resp)
+		// log.Infof("[%s] calling callback for entry index=%d", d.Tag, entry.Index)
 	}
 	if p != nil {
 		p.cb.Done(reply)
@@ -100,6 +145,23 @@ func (d *peerMsgHandler) proposeRequestMessage(msg *raft_cmdpb.RaftCmdRequest) {
 		log.Panic(err)
 	}
 }
+func (d *peerMsgHandler) proposeConfChangeRequestMessage(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
+	data, err := msg.Marshal()
+	if err != nil {
+		log.Panic(err)
+	}
+	cp := msg.AdminRequest.ChangePeer
+	cc := eraftpb.ConfChange{
+		ChangeType: cp.ChangeType,
+		NodeId:     cp.Peer.Id,
+		Context:    data,
+	}
+	d.appendProposal(cb)
+	if err = d.RaftGroup.ProposeConfChange(cc); err != nil {
+		log.Panic(err)
+	}
+}
+
 func (d *peerMsgHandler) proposeRequestNormal(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	d.appendProposal(cb)
 	d.proposeRequestMessage(msg)
@@ -115,8 +177,13 @@ func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb 
 		// 没有 callback 函数
 		d.proposeRequestMessage(msg)
 	case raft_cmdpb.AdminCmdType_TransferLeader:
+		// log.Warningf("[%s] proposing transfer leader %+v", d.Tag, msg.AdminRequest.TransferLeader)
 		reply := d.handleAdminTransferLeader(msg.AdminRequest.TransferLeader)
 		cb.Done(reply)
+	case raft_cmdpb.AdminCmdType_ChangePeer:
+		//log.Warningf("[%s] proposing conf change %+v", d.Tag, msg.AdminRequest.ChangePeer)
+		d.proposeConfChangeRequestMessage(msg, cb)
+
 	}
 }
 func (d *peerMsgHandler) FindProposal(index, term uint64) *proposal {
@@ -143,6 +210,6 @@ func (d *peerMsgHandler) appendProposal(cb *message.Callback) {
 		term:  d.Term(),
 		cb:    cb,
 	}
-	//log.Infof("[%s] Appending proposal %d", d.Tag, proposal.index)
+	// log.Infof("[%s] appending proposal index=%d term=%d", d.Tag, proposal.index, proposal.term)
 	d.proposals = append(d.proposals, proposal)
 }

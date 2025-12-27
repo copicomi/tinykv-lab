@@ -41,6 +41,9 @@ func (rf *Raft) stepCandidate(m pb.Message) {
 }
 
 func (rf *Raft) stepFollower(m pb.Message) {
+	if isWorkingWithLeader(m.MsgType) {
+		rf.electionElapsed = 0
+	}
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
 		rf.handleAppendEntries(m)

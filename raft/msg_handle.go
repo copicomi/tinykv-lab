@@ -117,7 +117,7 @@ func (r *Raft) handlePropose(m pb.Message) {
 	for _, ent := range m.Entries {
 		if ent.EntryType == pb.EntryType_EntryConfChange {
 			// Only one pending conf change is allowed at a time.
-			if r.PendingConfIndex != 0 && r.RaftLog.committed < r.PendingConfIndex {
+			if r.PendingConfIndex != 0 && r.RaftLog.applied < r.PendingConfIndex {
 				return
 			}
 			r.PendingConfIndex = r.RaftLog.LastIndex() + 1
@@ -129,6 +129,13 @@ func (r *Raft) handlePropose(m pb.Message) {
 			Data:      ent.Data,
 		}
 		r.RaftLog.append(newEnt)
+	}
+	// Ensure local progress exists to avoid nil dereference when updating.
+	if r.Prs[r.id] == nil {
+		r.Prs[r.id] = &Progress{
+			Match: r.RaftLog.LastIndex(),
+			Next:  r.RaftLog.LastIndex() + 1,
+		}
 	}
 	r.Prs[r.id].Match = r.RaftLog.LastIndex()
 	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1

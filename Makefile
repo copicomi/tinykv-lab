@@ -83,9 +83,14 @@ project2b:
 	$(GOTEST) ./kv/test_raftstore -run ^TestPersistPartitionUnreliable2B$ || true
 	$(TEST_CLEAN)
 
-akane2b:
+akane2:
 	$(TEST_CLEAN)
 	$(GOTEST) ./kv/test_raftstore -run ^TestSnapshotUnreliableRecoverConcurrentPartition2C$ || true
+	$(TEST_CLEAN)
+
+akane_test:
+	$(TEST_CLEAN)
+	$(GOTEST) ./kv/test_raftstore -run ^TestBasicConfChange3B$ || true
 	$(TEST_CLEAN)
 
 project2c:

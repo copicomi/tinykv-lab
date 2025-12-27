@@ -231,6 +231,7 @@ func (r *Raft) Step(m pb.Message) error {
 			return nil
 		}
 	}
+
 	if r.findNewLeader(m) {
 		r.becomeFollower(m.Term, m.From)
 		// mDebug(r, "find new leader from %d, msg=%s", m.From, m.MsgType.String())
@@ -238,12 +239,14 @@ func (r *Raft) Step(m pb.Message) error {
 		r.becomeFollower(m.Term, None)
 		// mDebug(r, "find new candidate from %d, msg=%s", m.From, m.MsgType.String())
 	}
+
+	if m.MsgType == pb.MessageType_MsgPropose && r.leadTransferee != None {
+		return ErrProposalDropped // leader 转移期间拒绝新的 proposal
+	}
+
 	switch r.State {
 	case StateFollower:
 		r.stepFollower(m)
-		if isWorkingWithLeader(m.MsgType) {
-			r.electionElapsed = 0
-		}
 	case StateCandidate:
 		r.stepCandidate(m)
 	case StateLeader:
@@ -261,9 +264,16 @@ func (r *Raft) Step(m pb.Message) error {
 func (r *Raft) addNode(id uint64) {
 	// Your Code Here (3A).
 	if _, ok := r.Prs[id]; !ok {
-		r.Prs[id] = &Progress{
-			Match: r.RaftLog.snapshotIndex,
-			Next:  r.RaftLog.LastIndex() + 1,
+		if id == r.id {
+			r.Prs[id] = &Progress{
+				Match: r.RaftLog.LastIndex(),
+				Next:  r.RaftLog.LastIndex() + 1,
+			}
+		} else {
+			r.Prs[id] = &Progress{
+				Match: 0,
+				Next:  r.RaftLog.LastIndex() + 1,
+			}
 		}
 		r.peers = nodes(r)
 	}

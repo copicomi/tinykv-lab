@@ -46,13 +46,25 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	rd := d.RaftGroup
 	if rd.HasReady() {
 		ready := rd.Ready()
-		if _, err := d.peerStorage.SaveReadyState(&ready); err != nil {
+		result, err := d.peerStorage.SaveReadyState(&ready)
+		if err != nil {
 			log.Panic(err)
+		}
+		if result != nil {
+			d.peerStorage.SetRegion(result.Region)
+			meta := d.ctx.storeMeta
+			meta.Lock()
+			meta.regions[d.regionId] = result.Region
+			// Snapshot application initializes a replicated peer; now it is safe
+			// to place the region into the range index for future lookups.
+			meta.regionRanges.ReplaceOrInsert(&regionItem{region: result.Region})
+			meta.Unlock()
 		}
 		d.Send(d.ctx.trans, ready.Messages)
 		wb := &engine_util.WriteBatch{}
 		for _, entry := range ready.CommittedEntries {
 			d.processEntry(&entry, wb)
+			// log.Infof("[%s] processed committed entry index=%d", d.Tag, entry.Index)
 			if d.stopped {
 				return
 			}
@@ -131,7 +143,9 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 	err := d.preProposeRaftCommand(msg)
 	if err != nil {
 		cb.Done(ErrResp(err))
+		return
 	}
+	// log.Infof("[%s] proposeRaftCommand: request accepted, has requests=%d", d.Tag, len(msg.Requests))
 	// Your Code Here (2B).
 	if len(msg.Requests) > 0 {
 		if msg.AdminRequest != nil {

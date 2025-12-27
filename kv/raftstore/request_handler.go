@@ -2,9 +2,12 @@ package raftstore
 
 import (
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/meta"
+	"github.com/pingcap-incubator/tinykv/kv/raftstore/util"
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/log"
+	"github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/raft_cmdpb"
+	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
 )
 
 func (d *peerMsgHandler) handleAdminCompactLog(compact_log *raft_cmdpb.CompactLogRequest, wb *engine_util.WriteBatch) *raft_cmdpb.RaftCmdResponse {
@@ -27,6 +30,50 @@ func (d *peerMsgHandler) handleAdminCompactLog(compact_log *raft_cmdpb.CompactLo
 	return reply
 }
 
+func (d *peerMsgHandler) handleAdminChangePeer(change_peer *raft_cmdpb.ChangePeerRequest, wb *engine_util.WriteBatch) *raft_cmdpb.RaftCmdResponse {
+	reply := &raft_cmdpb.RaftCmdResponse{
+		Header: &raft_cmdpb.RaftResponseHeader{},
+		AdminResponse: &raft_cmdpb.AdminResponse{
+			CmdType:    raft_cmdpb.AdminCmdType_ChangePeer,
+			ChangePeer: &raft_cmdpb.ChangePeerResponse{},
+		},
+	}
+	switch change_peer.ChangeType {
+	case eraftpb.ConfChangeType_AddNode:
+		d.handleAdminChangePeerAddNode(change_peer, wb)
+	case eraftpb.ConfChangeType_RemoveNode:
+		d.handleAdminChangePeerRemoveNode(change_peer, wb)
+	default:
+		log.Panicf("[%s] unknown change peer type %v", d.Tag, change_peer.ChangeType)
+	}
+	reply.AdminResponse.ChangePeer.Region = d.Region()
+
+	return reply
+}
+
+func (d *peerMsgHandler) handleAdminChangePeerAddNode(change_peer *raft_cmdpb.ChangePeerRequest, wb *engine_util.WriteBatch) {
+	if util.FindPeer(d.Region(), change_peer.Peer.Id) != nil {
+		return
+	}
+	util.AddPeer(d.Region(), change_peer.Peer)
+	d.insertPeerCache(change_peer.Peer)
+	d.Region().RegionEpoch.ConfVer++
+	meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
+}
+
+func (d *peerMsgHandler) handleAdminChangePeerRemoveNode(change_peer *raft_cmdpb.ChangePeerRequest, wb *engine_util.WriteBatch) {
+	peer := util.RemovePeer(d.Region(), change_peer.Peer.Id)
+	if peer == nil {
+		return
+	}
+	if peer.Id == d.PeerId() {
+		d.destroyPeer()
+		return
+	}
+	d.removePeerCache(peer.Id)
+	d.Region().RegionEpoch.ConfVer++
+	meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
+}
 func (d *peerMsgHandler) handleAdminTransferLeader(transfer_leader *raft_cmdpb.TransferLeaderRequest) *raft_cmdpb.RaftCmdResponse {
 	reply := &raft_cmdpb.RaftCmdResponse{
 		Header: &raft_cmdpb.RaftResponseHeader{},
@@ -38,11 +85,6 @@ func (d *peerMsgHandler) handleAdminTransferLeader(transfer_leader *raft_cmdpb.T
 	d.RaftGroup.TransferLeader(transfer_leader.GetPeer().Id)
 	return reply
 }
-
-func (d *peerMsgHandler) handleAdminSplit(split *raft_cmdpb.SplitRequest, wb *engine_util.WriteBatch) *raft_cmdpb.RaftCmdResponse {
-	return nil
-}
-
 func (d *peerMsgHandler) handleNormalGet(get *raft_cmdpb.GetRequest) (*raft_cmdpb.GetResponse, error) {
 	ans, err := engine_util.GetCF(d.ctx.engine.Kv, get.GetCf(), get.GetKey())
 	if err != nil {

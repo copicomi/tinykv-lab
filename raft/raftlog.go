@@ -190,9 +190,10 @@ func (l *RaftLog) nextEntries(next uint64) ([]*pb.Entry, error) {
 	}
 	for _, entry := range l.entries[l.pa(next):] {
 		entries = append(entries, &pb.Entry{
-			Term:  entry.Term,
-			Index: entry.Index,
-			Data:  entry.Data,
+			EntryType: entry.EntryType,
+			Term:      entry.Term,
+			Index:     entry.Index,
+			Data:      entry.Data,
 		})
 	}
 	return entries, nil
