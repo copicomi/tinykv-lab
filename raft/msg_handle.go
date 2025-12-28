@@ -26,8 +26,22 @@ func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 	mDebug(r, "handle AppendResp From %d", m.From)
 	if m.Reject {
 		r.Prs[m.From].Next--
-		//TODO: 大步回退
-
+		/*
+			for {
+				//大步回退
+				term, err := r.RaftLog.Term(r.Prs[m.From].Next - 1)
+				if err == ErrCompacted {
+					break
+				}
+				if term != m.LogTerm {
+					break
+				}
+				r.Prs[m.From].Next--
+			}
+		*/
+		if r.Prs[m.From].Next%100 == 0 {
+			log.Errorf("raft %d: next of peer %d = %d", r.id, m.From, r.Prs[m.From].Next)
+		}
 		if r.Prs[m.From].Next < r.RaftLog.snapshotIndex {
 			log.Errorf("raft %d: next of peer %d = %d", r.id, m.From, r.Prs[m.From].Next)
 		}

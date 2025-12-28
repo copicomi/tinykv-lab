@@ -10,6 +10,10 @@ import (
 	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
 )
 
+func (d *peerMsgHandler) HandleAdminSplit(split *raft_cmdpb.SplitRequest, wb *engine_util.WriteBatch) *raft_cmdpb.RaftCmdResponse {
+	return nil
+}
+
 func (d *peerMsgHandler) handleAdminCompactLog(compact_log *raft_cmdpb.CompactLogRequest, wb *engine_util.WriteBatch) *raft_cmdpb.RaftCmdResponse {
 	reply := &raft_cmdpb.RaftCmdResponse{
 		Header: &raft_cmdpb.RaftResponseHeader{},
@@ -46,6 +50,7 @@ func (d *peerMsgHandler) handleAdminChangePeer(change_peer *raft_cmdpb.ChangePee
 	default:
 		log.Panicf("[%s] unknown change peer type %v", d.Tag, change_peer.ChangeType)
 	}
+
 	reply.AdminResponse.ChangePeer.Region = d.Region()
 
 	return reply
@@ -66,12 +71,14 @@ func (d *peerMsgHandler) handleAdminChangePeerRemoveNode(change_peer *raft_cmdpb
 	if peer == nil {
 		return
 	}
+	// Bump conf version before potentially destroying this peer so epoch stays
+	// consistent across all replicas that apply the conf change.
+	d.Region().RegionEpoch.ConfVer++
 	if peer.Id == d.PeerId() {
 		d.destroyPeer()
 		return
 	}
 	d.removePeerCache(peer.Id)
-	d.Region().RegionEpoch.ConfVer++
 	meta.WriteRegionState(wb, d.Region(), rspb.PeerState_Normal)
 }
 func (d *peerMsgHandler) handleAdminTransferLeader(transfer_leader *raft_cmdpb.TransferLeaderRequest) *raft_cmdpb.RaftCmdResponse {

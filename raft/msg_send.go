@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"github.com/pingcap-incubator/tinykv/kv/raftstore/util"
 	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
@@ -63,7 +64,7 @@ func (r *Raft) sendHeartbeat(to uint64) {
 		// 我们只在 AddNode 时将 Match 设为 0
 		// 此时将 commit 设为 0，用于指示 worker 初始化 peer
 		// 这里的判断见 kv/raftstore/util.go:IsInitialMsg()
-		commit = 0
+		commit = util.RaftInvalidIndex
 	}
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeat,

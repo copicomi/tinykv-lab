@@ -158,6 +158,16 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 	}
 }
 
+// getOtherPeer returns the peer that is not the one specified by excludePeerID
+func (d *peerMsgHandler) getOtherPeer(excludePeerID uint64, peers []*metapb.Peer) *metapb.Peer {
+	for _, peer := range peers {
+		if peer.Id != excludePeerID {
+			return peer
+		}
+	}
+	return nil
+}
+
 func (d *peerMsgHandler) onTick() {
 	if d.stopped {
 		return

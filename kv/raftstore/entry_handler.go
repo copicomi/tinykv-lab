@@ -89,6 +89,13 @@ func (d *peerMsgHandler) handleNormalCmdRequest(entry *eraftpb.Entry, msg *raft_
 	if p == nil {
 		// log.Warnf("[%s] proposal not found for entry index=%d term=%d", d.Tag, entry.Index, entry.Term)
 	}
+	if err := util.CheckRegionEpoch(msg, d.Region(), true); err != nil {
+		reply = ErrResp(err)
+		if p != nil {
+			p.cb.Done(reply)
+		}
+		return
+	}
 	for _, req := range msg.Requests {
 		resp, err := d.handleRaftRequest(req, wb, p)
 		if err != nil {
@@ -109,6 +116,8 @@ func (d *peerMsgHandler) handleAdminCmdRequest(adminReq *raft_cmdpb.AdminRequest
 	switch adminReq.CmdType {
 	case raft_cmdpb.AdminCmdType_CompactLog:
 		d.handleAdminCompactLog(adminReq.GetCompactLog(), wb)
+	case raft_cmdpb.AdminCmdType_Split:
+		d.HandleAdminSplit(adminReq.GetSplit(), wb)
 	default:
 		log.Warningf("unknown admin command %v", adminReq.CmdType)
 	}
@@ -122,10 +131,19 @@ func (d *peerMsgHandler) handleRaftRequest(req *raft_cmdpb.Request,
 	var err error
 	switch req.CmdType {
 	case raft_cmdpb.CmdType_Get:
+		if err := util.CheckKeyInRegion(req.GetGet().GetKey(), d.Region()); err != nil {
+			return nil, err
+		}
 		resp.Get, err = d.handleNormalGet(req.GetGet())
 	case raft_cmdpb.CmdType_Put:
+		if err := util.CheckKeyInRegion(req.GetPut().GetKey(), d.Region()); err != nil {
+			return nil, err
+		}
 		resp.Put = d.handleNormalPut(req.GetPut(), wb)
 	case raft_cmdpb.CmdType_Delete:
+		if err := util.CheckKeyInRegion(req.GetDelete().GetKey(), d.Region()); err != nil {
+			return nil, err
+		}
 		resp.Delete = d.handleNormalDelete(req.GetDelete(), wb)
 	case raft_cmdpb.CmdType_Snap:
 		resp.Snap = d.handleNormalSnap(req.GetSnap(), wb, p)
@@ -142,13 +160,17 @@ func (d *peerMsgHandler) proposeRequestMessage(msg *raft_cmdpb.RaftCmdRequest) {
 		log.Panic(err)
 	}
 	if err = d.RaftGroup.Propose(data); err != nil {
-		log.Panic(err)
+		log.Warningf("%v", err)
+		return
 	}
 }
 func (d *peerMsgHandler) proposeConfChangeRequestMessage(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	data, err := msg.Marshal()
 	if err != nil {
 		log.Panic(err)
+	}
+	if err := util.CheckRegionEpoch(msg, d.Region(), true); err != nil {
+		return
 	}
 	cp := msg.AdminRequest.ChangePeer
 	cc := eraftpb.ConfChange{
@@ -167,11 +189,42 @@ func (d *peerMsgHandler) proposeRequestNormal(msg *raft_cmdpb.RaftCmdRequest, cb
 	d.proposeRequestMessage(msg)
 }
 
+func (d *peerMsgHandler) proposeConfChangeWith2Peers(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) bool {
+	req := &raft_cmdpb.RaftCmdRequest{}
+	// Handle the case where leader is being removed with only 2 peers in unreliable network.
+	// In this case, reject the propose and initiate a leadership transfer.
+	if req.AdminRequest != nil && req.AdminRequest.CmdType == raft_cmdpb.AdminCmdType_ChangePeer {
+		peers := d.Region().GetPeers()
+		if len(peers) == 2 && req.AdminRequest.ChangePeer.ChangeType == eraftpb.ConfChangeType_RemoveNode {
+			removePeerID := req.AdminRequest.ChangePeer.Peer.Id
+			if removePeerID == d.PeerId() {
+				// Leader is being removed with only 2 peers in the region.
+				// In unreliable network, we should:
+				// 1. Reject this propose
+				// 2. Initiate leadership transfer to the other peer
+				// This avoids the situation where:
+				// - Leader removes itself
+				// - But the other peer doesn't receive the conf change due to packet loss
+				// - The other peer will try to elect but can't get vote from the removed peer
+				otherPeer := d.getOtherPeer(removePeerID, peers)
+				if otherPeer != nil {
+					log.Infof("%s initiating leadership transfer to peer %d before rejecting self-remove", d.Tag, otherPeer.Id)
+					d.RaftGroup.TransferLeader(otherPeer.Id)
+				}
+				// Reject this propose, client will retry
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	if msg.AdminRequest == nil {
 		log.Warning("msg must contain admin request")
 		return
 	}
+
 	switch msg.AdminRequest.CmdType {
 	case raft_cmdpb.AdminCmdType_CompactLog:
 		// 没有 callback 函数
@@ -181,8 +234,24 @@ func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb 
 		reply := d.handleAdminTransferLeader(msg.AdminRequest.TransferLeader)
 		cb.Done(reply)
 	case raft_cmdpb.AdminCmdType_ChangePeer:
+		if d.proposeConfChangeWith2Peers(msg, cb) {
+			return
+		}
 		//log.Warningf("[%s] proposing conf change %+v", d.Tag, msg.AdminRequest.ChangePeer)
 		d.proposeConfChangeRequestMessage(msg, cb)
+	case raft_cmdpb.AdminCmdType_Split:
+		if err := util.CheckKeyInRegion(msg.AdminRequest.Split.GetSplitKey(), d.Region()); err != nil {
+			reply := ErrResp(err)
+			cb.Done(reply)
+			return
+		}
+		if err := util.CheckRegionEpoch(msg, d.Region(), true); err != nil {
+			reply := ErrResp(err)
+			cb.Done(reply)
+			return
+		}
+		d.appendProposal(cb)
+		d.proposeRequestMessage(msg)
 
 	}
 }
