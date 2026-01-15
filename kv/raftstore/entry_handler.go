@@ -33,7 +33,11 @@ func (d *peerMsgHandler) handleNormalEntry(entry *eraftpb.Entry, wb *engine_util
 	log.Debug(msg)
 	// log.Infof("[%s] processing entry index=%d, has admin request: %v", d.Tag, entry.Index, msg.AdminRequest != nil)
 	if msg.AdminRequest != nil {
-		d.handleAdminCmdRequest(msg.AdminRequest, wb)
+		// 对 Admin 命令，查找对应 proposal 并返回响应
+		reply := d.handleAdminCmdRequest(msg.AdminRequest, wb)
+		if p := d.FindProposal(entry.Index, entry.Term); p != nil {
+			p.cb.Done(reply)
+		}
 	} else {
 		d.handleNormalCmdRequest(entry, msg, wb)
 	}
@@ -112,15 +116,23 @@ func (d *peerMsgHandler) handleNormalCmdRequest(entry *eraftpb.Entry, msg *raft_
 	wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
 	// TODO: 是否应该分批写入 DB？
 }
-func (d *peerMsgHandler) handleAdminCmdRequest(adminReq *raft_cmdpb.AdminRequest, wb *engine_util.WriteBatch) {
+func (d *peerMsgHandler) handleAdminCmdRequest(adminReq *raft_cmdpb.AdminRequest, wb *engine_util.WriteBatch) *raft_cmdpb.RaftCmdResponse {
 	switch adminReq.CmdType {
 	case raft_cmdpb.AdminCmdType_CompactLog:
-		d.handleAdminCompactLog(adminReq.GetCompactLog(), wb)
+		return d.handleAdminCompactLog(adminReq.GetCompactLog(), wb)
 	case raft_cmdpb.AdminCmdType_Split:
-		d.HandleAdminSplit(adminReq.GetSplit(), wb)
+		return d.HandleAdminSplit(adminReq.GetSplit(), wb)
 	default:
 		log.Warningf("unknown admin command %v", adminReq.CmdType)
+		return &raft_cmdpb.RaftCmdResponse{Header: &raft_cmdpb.RaftResponseHeader{}}
 	}
+	// unreachable
+	// return empty to satisfy compiler in case of future changes
+	// but logically we returned above
+	// keep a default return here
+	// (Go will require it if switch ends without default)
+	// Though above has default
+	return &raft_cmdpb.RaftCmdResponse{Header: &raft_cmdpb.RaftResponseHeader{}}
 }
 
 func (d *peerMsgHandler) handleRaftRequest(req *raft_cmdpb.Request,

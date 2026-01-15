@@ -312,21 +312,24 @@ func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.Write
 		return nil
 	}
 
+	// Delete any existing log entries from the first index of new entries
+	// to the previous last index to resolve conflicts correctly.
+	firstIndex := entries[0].Index
+	if firstIndex <= ps.raftState.LastIndex {
+		for i := firstIndex; i <= ps.raftState.LastIndex; i++ {
+			raftWB.DeleteMeta(meta.RaftLogKey(ps.region.Id, i))
+		}
+	}
+
+	// Append new entries
 	for _, entry := range entries {
 		if err := raftWB.SetMeta(meta.RaftLogKey(ps.region.Id, entry.Index), &entry); err != nil {
 			log.Panic(err)
 		}
 	}
 
-	lastIndex := entries[len(entries)-1].Index
-
-	if lastIndex <= ps.raftState.LastIndex {
-		for i := lastIndex + 1; i <= ps.raftState.LastIndex; i++ {
-			raftWB.DeleteMeta(meta.RaftLogKey(ps.region.Id, i))
-		}
-	}
-
-	ps.raftState.LastIndex = lastIndex
+	// Update last index/term to reflect the new tail of the log
+	ps.raftState.LastIndex = entries[len(entries)-1].Index
 	ps.raftState.LastTerm = entries[len(entries)-1].Term
 
 	return nil
@@ -343,11 +346,13 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 	// and send RegionTaskApply task to region worker through ps.regionSched, also remember call ps.clearMeta
 	// and ps.clearExtraData to delete stale data
 	// Your Code Here (2C).
+	// Note: We do NOT call ps.clearExtraData here because in split scenarios, the extra data
+	// (e.g., [c,b) when snapshot contains [a,c)) should be managed by the new region's peer,
+	// not deleted by the old region's peer. Deleting it would cause data loss.
 	if ps.isInitialized() {
 		if err := ps.clearMeta(kvWB, raftWB); err != nil {
 			return nil, err
 		}
-		ps.clearExtraData(snapData.Region)
 	}
 
 	ps.raftState = &rspb.RaftLocalState{

@@ -90,7 +90,7 @@ akane2:
 
 akane_test:
 	$(TEST_CLEAN)
-	$(GOTEST) ./kv/test_raftstore -run ^TestConfChangeSnapshotUnreliableRecoverConcurrentPartition3B$ || true
+	$(GOTEST) ./kv/test_raftstore -run ^TestSplitConfChangeSnapshotUnreliableRecoverConcurrentPartition3B$ || true
 	$(TEST_CLEAN)
 
 project2c:
