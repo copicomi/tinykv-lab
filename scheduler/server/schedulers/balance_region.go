@@ -102,7 +102,7 @@ func (s *balanceRegionScheduler) Schedule(cluster opt.Cluster) *operator.Operato
 	for _, sourceStore := range suitableStores {
 		var candidateRegions []*core.RegionInfo
 
-		containerFuncs := []func(uint64, func(core.RegionsContainer)) {
+		containerFuncs := []func(uint64, func(core.RegionsContainer)){
 			cluster.GetPendingRegionsWithLock,
 			cluster.GetFollowersWithLock,
 			cluster.GetLeadersWithLock,
