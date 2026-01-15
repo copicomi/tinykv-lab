@@ -14,6 +14,8 @@
 package schedulers
 
 import (
+	"sort"
+
 	"github.com/pingcap-incubator/tinykv/scheduler/server/core"
 	"github.com/pingcap-incubator/tinykv/scheduler/server/schedule"
 	"github.com/pingcap-incubator/tinykv/scheduler/server/schedule/operator"
@@ -76,7 +78,113 @@ func (s *balanceRegionScheduler) IsScheduleAllowed(cluster opt.Cluster) bool {
 }
 
 func (s *balanceRegionScheduler) Schedule(cluster opt.Cluster) *operator.Operator {
-	// Your Code Here (3C).
+	// Select a store to move a region from.
+	// We want the store with the largest region size.
+	stores := cluster.GetStores()
+
+	// Filter suitable stores
+	var suitableStores []*core.StoreInfo
+	for _, store := range stores {
+		if store.IsUp() && store.DownTime() < cluster.GetMaxStoreDownTime() {
+			suitableStores = append(suitableStores, store)
+		}
+	}
+
+	if len(suitableStores) <= 1 {
+		return nil
+	}
+
+	// Sort suitableStores by RegionSize descending
+	sort.Slice(suitableStores, func(i, j int) bool {
+		return suitableStores[i].GetRegionSize() > suitableStores[j].GetRegionSize()
+	})
+
+	for _, sourceStore := range suitableStores {
+		var candidateRegions []*core.RegionInfo
+
+		containerFuncs := []func(uint64, func(core.RegionsContainer)) {
+			cluster.GetPendingRegionsWithLock,
+			cluster.GetFollowersWithLock,
+			cluster.GetLeadersWithLock,
+		}
+
+		for _, fn := range containerFuncs {
+			fn(sourceStore.GetID(), func(container core.RegionsContainer) {
+				for k := 0; k < balanceRegionRetryLimit; k++ {
+					r := container.RandomRegion(nil, nil)
+					if r != nil {
+						candidateRegions = append(candidateRegions, r)
+					}
+				}
+			})
+		}
+
+		if len(candidateRegions) == 0 {
+			continue
+		}
+
+		// Dedup candidates
+		seen := make(map[uint64]struct{})
+		var uniqRegions []*core.RegionInfo
+		for _, r := range candidateRegions {
+			if _, ok := seen[r.GetID()]; !ok {
+				seen[r.GetID()] = struct{}{}
+				uniqRegions = append(uniqRegions, r)
+			}
+		}
+		candidateRegions = uniqRegions
+
+		for _, region := range candidateRegions {
+			if len(region.GetMeta().GetPeers()) < cluster.GetMaxReplicas() {
+				continue
+			}
+			// Find best target store (smallest region size)
+			var bestTarget *core.StoreInfo
+			var minSize int64 = -1
+
+			for _, target := range suitableStores {
+				if target.GetID() == sourceStore.GetID() {
+					continue
+				}
+				if region.GetStorePeer(target.GetID()) != nil {
+					continue
+				}
+
+				if minSize == -1 || target.GetRegionSize() < minSize {
+					minSize = target.GetRegionSize()
+					bestTarget = target
+				}
+			}
+
+			if bestTarget == nil {
+				continue
+			}
+
+			diff := sourceStore.GetRegionSize() - bestTarget.GetRegionSize()
+			// Condition: The move is valuable if diff > 2 * regionSize
+			if diff > 2*region.GetApproximateSize() {
+				// Allocate new peer
+				peer, err := cluster.AllocPeer(bestTarget.GetID())
+				if err != nil {
+					return nil
+				}
+
+				op, err := operator.CreateMovePeerOperator(
+					"balance-region",
+					cluster,
+					region,
+					operator.OpBalance,
+					sourceStore.GetID(),
+					bestTarget.GetID(),
+					peer.GetId(),
+				)
+				if err != nil {
+					continue
+				}
+				return op
+			}
+		}
+	}
 
 	return nil
 }
